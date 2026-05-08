@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Attendance — AI Face Attendance</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    /* Feed */
+    .feed { position:relative;border-radius:var(--radius-lg);overflow:hidden;background:#000;aspect-ratio:16/9;border:1px solid var(--border); }
+    .feed video,.feed canvas.ov { width:100%;height:100%;object-fit:cover;display:block; }
+    .feed canvas.ov { position:absolute;inset:0;z-index:3;pointer-events:none; }
+    .feed-idle { position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:var(--bg-2);z-index:8; }
+    .feed-idle-icon { width:80px;height:80px;border-radius:50%;background:var(--surface);border:2px dashed var(--border-2);display:flex;align-items:center;justify-content:center;font-size:32px;color:var(--text-3); }
+
+    /* Scan line */
+    .scan { position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,var(--primary),var(--cyan),transparent);z-index:4;animation:scan 2.8s linear infinite;opacity:0; }
+    .scan.on { opacity:1; }
+    @keyframes scan{0%{top:0;opacity:0}5%{opacity:1}95%{opacity:1}100%{top:100%;opacity:0}}
+
+    /* HUD corners */
+    .hud { position:absolute;z-index:5;width:20px;height:20px;border-color:rgba(14,165,233,.7);border-style:solid; }
+    .hud.tl{top:10px;left:10px;border-width:2px 0 0 2px;border-radius:4px 0 0 0;}
+    .hud.tr{top:10px;right:10px;border-width:2px 2px 0 0;border-radius:0 4px 0 0;}
+    .hud.bl{bottom:10px;left:10px;border-width:0 0 2px 2px;border-radius:0 0 0 4px;}
+    .hud.br{bottom:10px;right:10px;border-width:0 2px 2px 0;border-radius:0 0 4px 0;}
+
+    /* Status bar */
+    .feed-bar { position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.85));padding:28px 14px 10px;z-index:6;display:flex;align-items:center;justify-content:space-between;font-size:12px; }
+
+    /* Flash */
+    .rec-flash { position:absolute;inset:0;z-index:7;pointer-events:none;opacity:0;transition:opacity .15s;border:3px solid var(--success);border-radius:var(--radius-lg); }
+    .rec-flash.on { opacity:1;background:rgba(16,185,129,.12); }
+
+    /* REC dot */
+    .rec-dot { width:8px;height:8px;border-radius:50%;background:var(--danger);display:inline-block;margin-right:6px;animation:blink 1s infinite; }
+    @keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+
+    /* Control buttons */
+    .ctrl-bar { display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin-top:14px; }
+    .ctrl-btn { display:flex;flex-direction:column;align-items:center;gap:5px;padding:12px 16px;border-radius:10px;font-size:12px;font-weight:600;border:1px solid var(--border);background:var(--surface);color:var(--text-2);transition:all .18s;min-width:80px; }
+    .ctrl-btn i { font-size:20px; }
+    .ctrl-btn:hover:not(:disabled){ transform:translateY(-2px);border-color:var(--border-2); }
+    .ctrl-btn.start { background:var(--primary);color:#fff;border-color:var(--primary);box-shadow:0 4px 14px rgba(14,165,233,.3); }
+    .ctrl-btn.stop  { background:var(--danger); color:#fff;border-color:var(--danger); }
+    .ctrl-btn.pause { background:var(--warning);color:#000;border-color:var(--warning); }
+    .ctrl-btn.resume{ background:var(--success);color:#fff;border-color:var(--success); }
+    .ctrl-btn:disabled { opacity:.3;cursor:not-allowed;transform:none; }
+
+    /* Live stats strip */
+    .live-stats { display:flex;gap:10px;flex-wrap:wrap;justify-content:center;margin-top:12px; }
+    .lstat { padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;text-align:center;min-width:72px; }
+    .lstat .v { font-size:20px;font-weight:800;font-family:var(--mono); }
+    .lstat .l { font-size:10px;color:var(--text-2);letter-spacing:.04em;text-transform:uppercase; }
+
+    /* Result card */
+    .result { border:1px solid var(--border);border-radius:var(--radius-lg);padding:24px;text-align:center;background:var(--surface);transition:all .3s; }
+    .result.ok  { border-color:rgba(16,185,129,.4);background:rgba(16,185,129,.04); }
+    .result.dup { border-color:rgba(245,158,11,.4);background:rgba(245,158,11,.04); }
+    .result.err { border-color:rgba(244,63,94,.4); background:rgba(244,63,94,.04); }
+
+    /* Confidence ring */
+    .ring { position:relative;width:54px;height:54px; }
+    .ring svg { transform:rotate(-90deg); }
+    .ring .lbl { position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;font-family:var(--mono); }
+
+    /* Session log */
+    .log-entry { display:flex;align-items:center;gap:10px;padding:9px 16px;border-bottom:1px solid rgba(255,255,255,.03);animation:slideIn .3s ease; }
+    @keyframes slideIn{from{opacity:0;transform:translateX(-8px)}to{opacity:1;transform:translateX(0)}}
+    .log-entry:last-child{border-bottom:none;}
+  
+    /* Mobile responsive */
+    @media(max-width:640px){
+      .att-grid{grid-template-columns:1fr!important;}
+      .feed{aspect-ratio:4/3;}
+      .ctrl-bar{gap:6px;}
+      .ctrl-btn{padding:10px 10px;min-width:64px;font-size:11px;}
+      .ctrl-btn i{font-size:17px;}
+      .live-stats{justify-content:space-between;}
+      .lstat{flex:1;padding:8px 6px;min-width:0;}
+      .lstat .v{font-size:16px;}
+      .lstat .l{font-size:9px;}
+    }
+
+    </style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar" id="topbar"></header>
+    <div class="content-area">
+      <div id="sysBar" class="alert alert-info" style="display:none;margin-bottom:16px;"></div>
+
+      <div class="att-grid" style="display:grid;grid-template-columns:1.35fr 1fr;gap:16px;align-items:start;">
+
+        <!-- LEFT: feed + controls -->
+        <div>
+          <div class="feed" id="feedBox">
+            <div class="feed-idle" id="feedIdle">
+              <div class="feed-idle-icon"><i class="fas fa-camera"></i></div>
+              <div style="text-align:center;"><div style="font-weight:700;">Camera Offline</div><div style="font-size:12px;color:var(--text-2);margin-top:4px;">Start a session to begin</div></div>
+            </div>
+            <video id="camVid" autoplay muted playsinline style="display:none;"></video>
+            <canvas id="ov" class="ov" style="display:none;"></canvas>
+            <div class="scan" id="scanLine"></div>
+            <div class="hud tl"></div><div class="hud tr"></div><div class="hud bl"></div><div class="hud br"></div>
+            <div class="rec-flash" id="flash"></div>
+            <div class="feed-bar" id="feedBar" style="display:none;">
+              <span id="barTxt"><span class="rec-dot"></span>Initializing…</span>
+              <span class="mono" style="color:var(--text-2);">FPS <span id="fps">—</span> &nbsp;·&nbsp; <span id="frames">0</span> frames</span>
+            </div>
+          </div>
+
+          <div class="ctrl-bar">
+            <button class="ctrl-btn start" id="btnStart" onclick="startSession()"><i class="fas fa-play-circle"></i>Start</button>
+            <button class="ctrl-btn pause"  id="btnPause"  onclick="pauseRec()"   style="display:none;"><i class="fas fa-pause-circle"></i>Pause</button>
+            <button class="ctrl-btn resume" id="btnResume" onclick="resumeRec()"  style="display:none;"><i class="fas fa-play-circle"></i>Resume</button>
+            <button class="ctrl-btn stop"   id="btnStop"   onclick="stopSession()" style="display:none;"><i class="fas fa-stop-circle"></i>Stop</button>
+            <!-- Upload & Mark button -->
+            <button class="ctrl-btn" id="btnUpload" onclick="triggerUpload()" style="background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(16,185,129,.05));border-color:rgba(16,185,129,.4);color:var(--success);">
+              <i class="fas fa-image"></i>Upload & Mark
+            </button>
+            <button class="ctrl-btn" onclick="openManual()"><i class="fas fa-keyboard"></i>Manual</button>
+            <!-- Hidden file input -->
+            <input type="file" id="photoFileInput" accept="image/*" capture="user" style="display:none;" onchange="handlePhotoUpload(event)"/>
+          </div>
+
+          <div class="live-stats" id="liveStats" style="display:none;">
+            <div class="lstat"><div class="v" id="stMarked" style="color:var(--success);">0</div><div class="l">Marked</div></div>
+            <div class="lstat"><div class="v" id="stFrames">0</div><div class="l">Frames</div></div>
+            <div class="lstat"><div class="v" id="stLoaded" style="color:var(--primary);">—</div><div class="l">Loaded</div></div>
+            <div class="lstat"><div class="v" id="stDur">00:00</div><div class="l">Duration</div></div>
+          </div>
+        </div>
+
+        <!-- RIGHT: result + log -->
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <!-- Today summary -->
+          <div style="display:flex;gap:10px;">
+            <div class="lstat" style="flex:1;"><div class="v" id="tdPresent" style="color:var(--success);">—</div><div class="l">Present Today</div></div>
+            <div class="lstat" style="flex:1;"><div class="v" id="tdTotal" style="color:var(--primary);">—</div><div class="l">Total Students</div></div>
+          </div>
+
+          <!-- Result card -->
+          <div class="result" id="resultCard">
+            <i class="fas fa-fingerprint" style="font-size:40px;color:var(--border);display:block;margin-bottom:10px;"></i>
+            <div style="font-weight:600;color:var(--text-2);">Awaiting face…</div>
+            <div style="font-size:12px;color:var(--text-3);margin-top:4px;">Start session and face the camera</div>
+          </div>
+
+          <!-- Session log -->
+          <div class="card" style="flex:1;">
+            <div class="card-header" style="padding:12px 16px;">
+              <div class="card-title" style="font-size:13px;"><i class="fas fa-list-check"></i> Session Log</div>
+              <div style="display:flex;align-items:center;gap:8px;">
+                <span class="badge badge-success mono" id="logCount">0</span>
+                <button class="btn btn-ghost btn-sm" onclick="loadToday()" title="Refresh"><i class="fas fa-arrows-rotate" style="font-size:10px;"></i></button>
+              </div>
+            </div>
+            <div style="max-height:320px;overflow-y:auto;" id="sessionLog">
+              <div style="text-align:center;padding:28px;color:var(--text-2);font-size:13px;"><i class="fas fa-clock" style="display:block;font-size:22px;margin-bottom:8px;"></i>No marks yet</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Today table -->
+      <div class="card" style="margin-top:22px;">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-table-list"></i> Today's Attendance</div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-ghost btn-sm" onclick="loadToday()"><i class="fas fa-arrows-rotate"></i> Refresh</button>
+            <button class="btn btn-success btn-sm" onclick="exportToday()"><i class="fas fa-file-csv"></i> Export</button>
+          </div>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>#</th><th>Student</th><th>Roll</th><th>Class</th><th>Time</th><th>Conf.</th><th>Status</th></tr></thead>
+              <tbody id="todayTbl"><tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-2);"><button class="btn btn-ghost btn-sm" onclick="loadToday()"><i class="fas fa-refresh"></i> Load</button></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Photo Upload / Capture Modal -->
+<div class="modal-backdrop hidden" id="uploadModal">
+  <div class="modal" style="max-width:520px;">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fas fa-image" style="color:var(--success);"></i> Upload & Mark Attendance</div>
+      <button class="modal-close" onclick="closeUploadModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+
+      <div id="uploadAlert" class="alert hidden"></div>
+
+      <!-- Tabs: Upload vs Camera Snap -->
+      <div style="display:flex;gap:4px;background:var(--bg-2);border-radius:10px;padding:4px;margin-bottom:18px;">
+        <button id="tabUpload" onclick="switchUploadTab('upload')"
+          style="flex:1;padding:9px;border-radius:7px;border:none;font-size:13px;font-weight:600;font-family:var(--sans);cursor:pointer;background:var(--primary);color:#fff;transition:all .18s;">
+          <i class="fas fa-upload"></i> Upload Photo
+        </button>
+        <button id="tabSnap" onclick="switchUploadTab('snap')"
+          style="flex:1;padding:9px;border-radius:7px;border:none;font-size:13px;font-weight:600;font-family:var(--sans);cursor:pointer;background:transparent;color:var(--text-2);transition:all .18s;">
+          <i class="fas fa-camera"></i> Capture Photo
+        </button>
+      </div>
+
+      <!-- TAB: Upload -->
+      <div id="pnlUpload">
+        <!-- Drop zone -->
+        <div id="dropZone"
+          style="border:2px dashed var(--border);border-radius:12px;padding:32px 20px;text-align:center;cursor:pointer;transition:all .2s;background:var(--bg-2);"
+          onclick="document.getElementById('hiddenFileInput').click()"
+          ondragover="event.preventDefault();this.style.borderColor='var(--success)';this.style.background='rgba(16,185,129,.06)';"
+          ondragleave="this.style.borderColor='var(--border)';this.style.background='var(--bg-2)';"
+          ondrop="handleDrop(event)">
+          <i class="fas fa-cloud-upload-alt" style="font-size:40px;color:var(--text-3);display:block;margin-bottom:12px;"></i>
+          <div style="font-size:15px;font-weight:700;margin-bottom:6px;">Click or Drag Photo Here</div>
+          <div style="font-size:13px;color:var(--text-2);">JPG, PNG, JPEG · Phone camera photo works too</div>
+          <input type="file" id="hiddenFileInput" accept="image/*" style="display:none;" onchange="handleFileSelect(event)"/>
+        </div>
+      </div>
+
+      <!-- TAB: Camera Snap -->
+      <div id="pnlSnap" style="display:none;">
+        <div style="position:relative;border-radius:12px;overflow:hidden;background:#000;aspect-ratio:4/3;border:1px solid var(--border);max-width:400px;margin:0 auto;">
+          <div id="snapIdle" style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--bg-2);z-index:5;">
+            <i class="fas fa-camera" style="font-size:40px;color:var(--text-3);"></i>
+            <button class="btn btn-primary" onclick="startSnapCam()"><i class="fas fa-video"></i> Open Camera</button>
+          </div>
+          <video id="snapVideo" autoplay muted playsinline style="width:100%;height:100%;object-fit:cover;display:none;"></video>
+          <canvas id="snapCanvas" style="display:none;"></canvas>
+        </div>
+        <div style="display:flex;justify-content:center;gap:12px;margin-top:14px;">
+          <button class="btn btn-success" id="snapBtn" onclick="snapPhoto()" disabled style="opacity:.4;">
+            <i class="fas fa-camera"></i> Snap Photo
+          </button>
+          <button class="btn btn-ghost" onclick="retakeSnap()" id="retakeSnapBtn" style="display:none;">
+            <i class="fas fa-redo"></i> Retake
+          </button>
+        </div>
+      </div>
+
+      <!-- Preview + Result area -->
+      <div id="uploadPreviewArea" style="display:none;margin-top:18px;">
+        <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap;">
+          <!-- Photo preview -->
+          <div style="flex-shrink:0;text-align:center;">
+            <img id="uploadPreviewImg"
+              style="width:120px;height:120px;object-fit:cover;border-radius:12px;border:2px solid var(--border);" src=""/>
+            <div style="font-size:11px;color:var(--text-2);margin-top:6px;" id="uploadFileName">—</div>
+          </div>
+          <!-- Recognition result -->
+          <div id="uploadResult" style="flex:1;min-width:140px;padding:14px;background:var(--bg-2);border-radius:10px;border:1px solid var(--border);">
+            <div style="font-size:12px;color:var(--text-2);">Click "Recognize & Mark" to identify student</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-footer" style="justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <button class="btn btn-ghost" onclick="closeUploadModal()">Cancel</button>
+      <div style="display:flex;gap:10px;">
+        <button class="btn btn-ghost btn-sm" onclick="clearUploadPhoto()" id="clearUploadBtn" style="display:none;">
+          <i class="fas fa-trash"></i> Clear
+        </button>
+        <button class="btn btn-success" id="recognizeUploadBtn" onclick="recognizeUploadedPhoto()" disabled style="opacity:.4;">
+          <i class="fas fa-fingerprint"></i> Recognize & Mark
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Manual modal -->
+<div class="modal-backdrop hidden" id="manualModal">
+  <div class="modal" style="max-width:360px;">
+    <div class="modal-header"><div class="modal-title"><i class="fas fa-keyboard"></i> Manual Entry</div><button class="modal-close" onclick="closeManual()"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body">
+      <div id="manAlert" class="alert alert-error hidden"></div>
+      <div class="form-group"><label>Roll Number</label><div class="input-icon"><i class="fas fa-hashtag"></i><input class="form-control" id="manRoll" placeholder="e.g. 2024001"/></div></div>
+      <div class="form-group"><label>Status</label>
+        <select class="form-control" id="manStatus"><option value="present">Present</option><option value="late">Late</option><option value="absent">Absent</option></select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeManual()">Cancel</button>
+      <button class="btn btn-primary" onclick="submitManual()"><i class="fas fa-check"></i> Mark</button>
+    </div>
+  </div>
+</div>
+
+<!-- Summary modal -->
+<div class="modal-backdrop hidden" id="sumModal">
+  <div class="modal">
+    <div class="modal-header"><div class="modal-title"><i class="fas fa-chart-bar"></i> Session Summary</div><button class="modal-close" onclick="document.getElementById('sumModal').classList.add('hidden')"><i class="fas fa-times"></i></button></div>
+    <div class="modal-body" id="sumBody"></div>
+    <div class="modal-footer"><button class="btn btn-primary" onclick="document.getElementById('sumModal').classList.add('hidden')">Close</button></div>
+  </div>
+</div>
+
+<script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/sidebar.js"></script>
+<script src="../js/camera.js"></script>
+<script>
+requireAuth();
+buildLayout('attendance','Live Attendance','● RECOGNITION');
+
+let cam=null,active=false,paused=false,recInt=null,fpsInt=null,sessionStart=null;
+let loaded=0,fpsFrames=0,frames=0,marked=0,sessionLog=[];
+const cooldown={},COOL=8000;
+let todayRows=[];
+
+setInterval(()=>{
+  if(active&&sessionStart){
+    const s=Math.floor((Date.now()-sessionStart)/1000);
+    document.getElementById('stDur').textContent=`${String(Math.floor(s/60)).padStart(2,'0')}:${String(s%60).padStart(2,'0')}`;
+  }
+},1000);
+
+async function startSession(){
+  sysMsg('Starting session…','info');
+  try{
+    const r=await API.request('POST','/attendance/session/start',{});
+    loaded=r.students_loaded;
+    document.getElementById('stLoaded').textContent=loaded;
+    sysMsg(`✓ Session started — ${loaded} students loaded`,'success');
+    setTimeout(hideSys,3000);
+  }catch(e){sysMsg('❌ '+e.message,'error');return;}
+  cam=new CameraManager('camVid','ov');
+  if(!await cam.start()){sysMsg('Camera denied','error');return;}
+  document.getElementById('camVid').style.display='block';
+  document.getElementById('ov').style.display='block';
+  document.getElementById('feedIdle').style.display='none';
+  document.getElementById('feedBar').style.display='flex';
+  document.getElementById('scanLine').classList.add('on');
+  active=true;paused=false;sessionStart=Date.now();frames=0;marked=0;sessionLog=[];
+  document.getElementById('btnStart').style.display='none';
+  document.getElementById('btnPause').style.display='inline-flex';
+  document.getElementById('btnStop').style.display='inline-flex';
+  document.getElementById('liveStats').style.display='flex';
+  fpsInt=setInterval(()=>{document.getElementById('fps').textContent=fpsFrames;fpsFrames=0;},1000);
+  startLoop();loadToday();updateSummary();
+}
+
+function startLoop(){
+  recInt=setInterval(async()=>{
+    if(!active||paused||!cam?.active)return;
+    const img=cam.captureBase64();if(!img)return;
+    fpsFrames++;frames++;
+    document.getElementById('frames').textContent=frames;
+    document.getElementById('stFrames').textContent=frames;
+    try{
+      const pv=await API.request('POST','/attendance/detect-face',{face_image:img});
+      if(pv.annotated)drawAnnotated(pv.annotated);
+      updateBarTxt(pv.faces,pv.ready);
+    }catch(e){}
+    if(frames%3!==0)return;
+    try{
+      const r=await API.request('POST','/attendance/recognize',{face_image:img});
+      handleResult(r);
+    }catch(e){}
+  },200);
+}
+
+function drawAnnotated(b64){
+  const c=document.getElementById('ov'),ctx=c.getContext('2d'),im=new Image();
+  im.onload=()=>{c.width=im.width;c.height=im.height;ctx.drawImage(im,0,0);};
+  im.src='data:image/jpeg;base64,'+b64;
+}
+
+function updateBarTxt(faces,ready){
+  const el=document.getElementById('barTxt');
+  if(!faces)     el.innerHTML='<span class="rec-dot"></span><span style="color:var(--text-2);">Scanning…</span>';
+  else if(ready) el.innerHTML='<span class="rec-dot"></span><span style="color:var(--success);">Face detected</span>';
+  else           el.innerHTML='<span class="rec-dot"></span><span style="color:var(--warning);">Adjust position</span>';
+}
+
+function handleResult(r){
+  if(!r.success){if(r.message&&!r.message.toLowerCase().includes('no face'))setResult('err',null,r.message,0);return;}
+  const now=Date.now();
+  if(cooldown[r.student_id]&&now-cooldown[r.student_id]<COOL)return;
+  cooldown[r.student_id]=now;
+  if(r.already_marked){setResult('dup',r,'Already marked',r.confidence);}
+  else{
+    marked++;document.getElementById('stMarked').textContent=marked;
+    flash();setResult('ok',r,'✓ Attendance Marked',r.confidence);
+    addLog(r);loadToday();updateSummary();
+    showToast(`${r.name} — ${r.confidence}%`,'success');
+  }
+}
+
+function flash(){const f=document.getElementById('flash');f.classList.add('on');setTimeout(()=>f.classList.remove('on'),600);}
+
+function setResult(type,r,msg,conf){
+  const card=document.getElementById('resultCard');
+  card.className='result '+(type==='ok'?'ok':type==='dup'?'dup':'err');
+  if(!r){card.innerHTML=`<i class="fas fa-times-circle" style="font-size:38px;color:var(--danger);display:block;margin-bottom:10px;"></i><div style="font-weight:600;">${msg}</div>`;return;}
+  const init=initials(r.name);
+  const color=type==='ok'?'var(--success)':'var(--warning)';
+  const circ=2*Math.PI*22;const off=circ-(conf/100)*circ;
+  card.innerHTML=`
+    <div class="avatar avatar-lg" style="margin:0 auto 12px;border:3px solid ${color};">${init}</div>
+    <div style="font-size:20px;font-weight:800;margin-bottom:3px;">${r.name}</div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:14px;" class="mono">${r.roll_number||'—'}</div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:16px;">
+      <div class="ring">
+        <svg width="54" height="54" viewBox="0 0 54 54">
+          <circle cx="27" cy="27" r="22" fill="none" stroke="var(--border)" stroke-width="4"/>
+          <circle cx="27" cy="27" r="22" fill="none" stroke="${color}" stroke-width="4" stroke-dasharray="${circ}" stroke-dashoffset="${off}" stroke-linecap="round"/>
+        </svg>
+        <div class="lbl" style="color:${color};">${conf}%</div>
+      </div>
+      <div style="text-align:left;">
+        <div style="font-size:11px;color:var(--text-2);">Confidence</div>
+        <div style="font-size:16px;font-weight:800;color:${color};" class="mono">${conf}%</div>
+      </div>
+    </div>
+    <div style="margin-top:12px;"><span class="badge" style="background:${color}20;color:${color};border-color:${color}40;font-size:13px;padding:6px 16px;">${msg}</span></div>
+    <div style="font-size:11px;color:var(--text-2);margin-top:8px;" class="mono">${new Date().toLocaleTimeString('en-IN')}</div>`;
+}
+
+function addLog(r){
+  if(sessionLog.find(e=>e.student_id===r.student_id))return;
+  sessionLog.unshift({...r,at:new Date().toLocaleTimeString('en-IN')});
+  document.getElementById('logCount').textContent=sessionLog.length;
+  document.getElementById('sessionLog').innerHTML=sessionLog.map((e,i)=>`
+    <div class="log-entry">
+      <div style="font-size:12px;color:var(--text-2);font-family:var(--mono);width:18px;">${i+1}</div>
+      <div class="avatar avatar-sm">${initials(e.name)}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:13px;">${e.name}</div>
+        <div class="mono" style="font-size:11px;color:var(--text-2);">${e.roll_number||'—'}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div class="mono" style="font-size:12px;color:var(--success);">${e.confidence}%</div>
+        <div style="font-size:11px;color:var(--text-2);">${e.at}</div>
+      </div>
+    </div>`).join('');
+}
+
+function pauseRec(){paused=true;document.getElementById('scanLine').classList.remove('on');document.getElementById('btnPause').style.display='none';document.getElementById('btnResume').style.display='inline-flex';showToast('Paused','warning');}
+function resumeRec(){paused=false;document.getElementById('scanLine').classList.add('on');document.getElementById('btnResume').style.display='none';document.getElementById('btnPause').style.display='inline-flex';showToast('Resumed','success');}
+
+async function stopSession(){
+  clearInterval(recInt);clearInterval(fpsInt);
+  if(cam){cam.stop();cam=null;}
+  let sum=null;try{sum=await API.request('POST','/attendance/session/stop',{});}catch(e){}
+  active=false;
+  document.getElementById('camVid').style.display='none';document.getElementById('ov').style.display='none';
+  document.getElementById('feedIdle').style.display='flex';document.getElementById('feedBar').style.display='none';
+  document.getElementById('scanLine').classList.remove('on');
+  document.getElementById('btnStart').style.display='inline-flex';
+  document.getElementById('btnPause').style.display='none';document.getElementById('btnResume').style.display='none';document.getElementById('btnStop').style.display='none';
+  if(sum)showSummary(sum);loadToday();
+}
+
+function showSummary(s){
+  const dur=s.started_at&&s.ended_at?Math.floor((new Date(s.ended_at)-new Date(s.started_at))/1000)+'s':'—';
+  document.getElementById('sumBody').innerHTML=`
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:18px;">
+      <div class="lstat"><div class="v" style="color:var(--success);">${s.students_marked}</div><div class="l">Marked</div></div>
+      <div class="lstat"><div class="v">${s.frames_processed}</div><div class="l">Frames</div></div>
+      <div class="lstat"><div class="v">${s.faces_detected}</div><div class="l">Detections</div></div>
+      <div class="lstat"><div class="v">${dur}</div><div class="l">Duration</div></div>
+    </div>
+    ${(s.log||[]).map((e,i)=>`<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px;"><span style="font-weight:600;">${i+1}. ${e.name}</span><span class="mono" style="color:var(--text-2);">${e.roll_number} · ${e.time} · ${e.confidence}%</span></div>`).join('')||'<div style="color:var(--text-2);font-size:13px;">No marks</div>'}`;
+  document.getElementById('sumModal').classList.remove('hidden');
+}
+
+async function loadToday(){
+  try{
+    todayRows=await API.getTodayAttendance();
+    document.getElementById('tdPresent').textContent=todayRows.length;
+    renderTodayTable(todayRows);
+  }catch(e){}
+}
+async function updateSummary(){
+  try{const s=await API.getDashboardStats();document.getElementById('tdPresent').textContent=s.present_today;document.getElementById('tdTotal').textContent=s.total_students;}catch(e){}
+}
+function renderTodayTable(rows){
+  if(!rows.length){document.getElementById('todayTbl').innerHTML='<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--text-2);"><i class="fas fa-inbox" style="font-size:24px;display:block;margin-bottom:8px;"></i>No attendance today</td></tr>';return;}
+  document.getElementById('todayTbl').innerHTML=rows.map((r,i)=>{
+    const s=r.students||{};const init=initials(s.name||'?');
+    return `<tr><td class="mono" style="color:var(--text-2);font-size:11px;">${i+1}</td>
+      <td><div style="display:flex;align-items:center;gap:8px;"><div class="avatar avatar-sm">${init}</div><span style="font-weight:600;font-size:13px;">${s.name||'—'}</span></div></td>
+      <td class="mono" style="color:var(--text-2);">${s.roll_number||'—'}</td>
+      <td style="font-size:12px;">${s.class||'—'}</td>
+      <td style="font-weight:600;" class="mono">${formatTime(r.time)}</td>
+      <td style="font-size:12px;color:var(--success);" class="mono">${r.confidence?r.confidence+'%':'—'}</td>
+      <td><span class="badge badge-success"><i class="fas fa-check"></i> ${r.status}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function exportToday(){
+  if(!todayRows.length){showToast('No data','warning');return;}
+  const h=['#','Name','Roll','Class','Date','Time','Confidence','Status'];
+  const rows=todayRows.map((r,i)=>{const s=r.students||{};return [i+1,s.name||'',s.roll_number||'',s.class||'',r.date,r.time,r.confidence||'',r.status];});
+  const csv=[h,...rows].map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`attendance_${new Date().toISOString().split('T')[0]}.csv`;a.click();
+  showToast('Exported!','success');
+}
+
+function openManual(){document.getElementById('manualModal').classList.remove('hidden');document.getElementById('manRoll').value='';document.getElementById('manAlert').classList.add('hidden');}
+function closeManual(){document.getElementById('manualModal').classList.add('hidden');}
+async function submitManual(){
+  const roll=document.getElementById('manRoll').value.trim();const st=document.getElementById('manStatus').value;
+  const a=document.getElementById('manAlert');
+  if(!roll){a.innerHTML='<i class="fas fa-exclamation-circle"></i> Enter roll number';a.classList.remove('hidden');return;}
+  try{await API.markManualAttendance({roll_number:roll,status:st});showToast(`Marked for ${roll}`,'success');closeManual();loadToday();updateSummary();}
+  catch(e){a.innerHTML=`<i class="fas fa-exclamation-circle"></i> ${e.message}`;a.classList.remove('hidden');}
+}
+
+function sysMsg(msg,type){const el=document.getElementById('sysBar');el.className=`alert alert-${type}`;el.textContent=msg;el.style.display='flex';}
+function hideSys(){document.getElementById('sysBar').style.display='none';}
+
+// ══════════════════════════════════════════════════
+//  UPLOAD & MARK — Photo upload / camera snap
+// ══════════════════════════════════════════════════
+
+let uploadPhotoBase64 = null;   // currently loaded photo
+let snapCam           = null;   // camera for snap tab
+let snapPhotoBase64   = null;
+
+/* Open upload modal */
+function triggerUpload() {
+  document.getElementById('uploadModal').classList.remove('hidden');
+  uploadPhotoBase64 = null;
+  snapPhotoBase64   = null;
+  clearUploadUI();
+  switchUploadTab('upload');
+}
+
+function closeUploadModal() {
+  document.getElementById('uploadModal').classList.add('hidden');
+  if (snapCam) { snapCam.stop(); snapCam = null; }
+}
+
+/* Clear photo and reset UI */
+function clearUploadUI() {
+  uploadPhotoBase64 = null;
+  snapPhotoBase64   = null;
+  document.getElementById('uploadPreviewArea').style.display = 'none';
+  document.getElementById('recognizeUploadBtn').disabled   = true;
+  document.getElementById('recognizeUploadBtn').style.opacity = '.4';
+  document.getElementById('clearUploadBtn').style.display  = 'none';
+  document.getElementById('uploadAlert').classList.add('hidden');
+  document.getElementById('dropZone').style.borderColor    = 'var(--border)';
+  document.getElementById('dropZone').style.background     = 'var(--bg-2)';
+}
+
+function clearUploadPhoto() { clearUploadUI(); }
+
+/* Tab switch */
+function switchUploadTab(tab) {
+  const isUpload = tab === 'upload';
+  document.getElementById('pnlUpload').style.display = isUpload ? 'block' : 'none';
+  document.getElementById('pnlSnap').style.display   = isUpload ? 'none'  : 'block';
+
+  const tU = document.getElementById('tabUpload');
+  const tS = document.getElementById('tabSnap');
+  tU.style.background = isUpload ? 'var(--primary)' : 'transparent';
+  tU.style.color      = isUpload ? '#fff' : 'var(--text-2)';
+  tS.style.background = isUpload ? 'transparent' : 'var(--primary)';
+  tS.style.color      = isUpload ? 'var(--text-2)' : '#fff';
+
+  if (!isUpload && !snapCam) { /* ready for user to click Open Camera */ }
+  if (isUpload && snapCam)   { snapCam.stop(); snapCam = null; }
+}
+
+/* ── File select (drag & drop or click) ─────────── */
+function handleFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) loadPhotoFile(file);
+}
+
+function handleDrop(e) {
+  e.preventDefault();
+  document.getElementById('dropZone').style.borderColor = 'var(--border)';
+  document.getElementById('dropZone').style.background  = 'var(--bg-2)';
+  const file = e.dataTransfer.files[0];
+  if (file && file.type.startsWith('image/')) loadPhotoFile(file);
+}
+
+function loadPhotoFile(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    uploadPhotoBase64 = e.target.result;   // data URL
+    showUploadPreview(uploadPhotoBase64, file.name);
+  };
+  reader.readAsDataURL(file);
+}
+
+/* ── Camera snap ─────────────────────────────────── */
+async function startSnapCam() {
+  snapCam = new CameraManager('snapVideo', 'snapCanvas');
+  const ok = await snapCam.start();
+  if (ok) {
+    document.getElementById('snapIdle').style.display  = 'none';
+    document.getElementById('snapVideo').style.display = 'block';
+    document.getElementById('snapBtn').disabled        = false;
+    document.getElementById('snapBtn').style.opacity   = '1';
+  } else {
+    showUploadAlert('Camera access denied. Try Upload tab instead.', 'error');
+  }
+}
+
+function snapPhoto() {
+  if (!snapCam?.active) return;
+  snapPhotoBase64 = snapCam.captureBase64();
+  if (!snapPhotoBase64) return;
+  uploadPhotoBase64 = snapPhotoBase64;
+  showUploadPreview(uploadPhotoBase64, 'Snapshot');
+  document.getElementById('retakeSnapBtn').style.display = 'inline-flex';
+  document.getElementById('snapBtn').style.display       = 'none';
+}
+
+function retakeSnap() {
+  uploadPhotoBase64 = null;
+  snapPhotoBase64   = null;
+  document.getElementById('retakeSnapBtn').style.display = 'none';
+  document.getElementById('snapBtn').style.display       = 'inline-flex';
+  document.getElementById('uploadPreviewArea').style.display = 'none';
+  document.getElementById('recognizeUploadBtn').disabled = true;
+  document.getElementById('recognizeUploadBtn').style.opacity = '.4';
+  document.getElementById('clearUploadBtn').style.display = 'none';
+}
+
+/* ── Show preview ────────────────────────────────── */
+function showUploadPreview(dataUrl, filename) {
+  document.getElementById('uploadPreviewImg').src = dataUrl;
+  document.getElementById('uploadFileName').textContent = filename || 'Photo loaded';
+  document.getElementById('uploadPreviewArea').style.display = 'block';
+  document.getElementById('recognizeUploadBtn').disabled = false;
+  document.getElementById('recognizeUploadBtn').style.opacity = '1';
+  document.getElementById('clearUploadBtn').style.display = 'inline-flex';
+  document.getElementById('uploadResult').innerHTML = `
+    <div style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--success);">
+      <i class="fas fa-check-circle"></i> Photo ready — Click "Recognize & Mark"
+    </div>`;
+}
+
+/* ── MAIN: Recognize & Mark ──────────────────────── */
+async function recognizeUploadedPhoto() {
+  if (!uploadPhotoBase64) return;
+
+  const btn = document.getElementById('recognizeUploadBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Recognizing…';
+
+  // Update result area with loading state
+  document.getElementById('uploadResult').innerHTML = `
+    <div style="text-align:center;padding:12px;color:var(--text-2);">
+      <i class="fas fa-spinner fa-spin" style="font-size:24px;display:block;margin-bottom:8px;"></i>
+      Comparing face with database…
+    </div>`;
+
+  try {
+    const result = await API.request('POST', '/attendance/recognize', {
+      face_image: uploadPhotoBase64
+    });
+
+    // Update image border
+    const img = document.getElementById('uploadPreviewImg');
+
+    if (result.success) {
+      const color = result.already_marked ? 'var(--warning)' : 'var(--success)';
+      const icon  = result.already_marked ? 'fa-clock' : 'fa-check-circle';
+      img.style.borderColor = color;
+
+      document.getElementById('uploadResult').innerHTML = `
+        <div style="text-align:center;">
+          <div style="font-size:22px;font-weight:800;margin-bottom:4px;">${result.name}</div>
+          <div class="mono" style="font-size:12px;color:var(--text-2);margin-bottom:10px;">Roll: ${result.roll_number||'—'}</div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:10px;margin-bottom:10px;">
+            <div style="background:var(--border);border-radius:99px;height:6px;width:80px;overflow:hidden;">
+              <div style="height:100%;border-radius:99px;background:${color};width:${result.confidence}%;"></div>
+            </div>
+            <span class="mono" style="font-size:13px;font-weight:700;color:${color};">${result.confidence}%</span>
+          </div>
+          <span class="badge" style="background:${color}20;color:${color};border-color:${color}40;font-size:12px;padding:6px 14px;">
+            <i class="fas ${icon}"></i> ${result.already_marked ? 'Already Marked Today' : '✅ Attendance Marked!'}
+          </span>
+        </div>`;
+
+      if (!result.already_marked) {
+        showToast(`✅ ${result.name} — Attendance marked! (${result.confidence}%)`, 'success', 4000);
+        loadToday();
+        updateSummary();
+      } else {
+        showToast(`${result.name} already marked today`, 'warning');
+      }
+
+    } else {
+      img.style.borderColor = 'var(--danger)';
+      document.getElementById('uploadResult').innerHTML = `
+        <div style="text-align:center;padding:8px;">
+          <i class="fas fa-times-circle" style="font-size:28px;color:var(--danger);display:block;margin-bottom:8px;"></i>
+          <div style="font-weight:700;color:var(--danger);margin-bottom:4px;">Not Recognized</div>
+          <div style="font-size:12px;color:var(--text-2);">${result.message}</div>
+        </div>`;
+      showToast('Face not recognized — register student first', 'error');
+    }
+
+  } catch (err) {
+    document.getElementById('uploadResult').innerHTML = `
+      <div style="text-align:center;padding:8px;color:var(--danger);font-size:13px;">
+        <i class="fas fa-exclamation-circle"></i> ${err.message}
+      </div>`;
+    showToast(err.message, 'error');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = '<i class="fas fa-fingerprint"></i> Recognize & Mark';
+}
+
+function showUploadAlert(msg, type) {
+  const el = document.getElementById('uploadAlert');
+  el.className = `alert alert-${type}`;
+  el.innerHTML = `<i class="fas fa-exclamation-circle"></i> ${msg}`;
+}
+
+loadToday();updateSummary();
+</script>
+</body>
+</html>

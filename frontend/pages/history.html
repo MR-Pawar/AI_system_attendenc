@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>History — AI Face Attendance</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    /* Filters */
+    .filters { display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;padding:16px 20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);margin-bottom:20px; }
+    .filter-field { display:flex;flex-direction:column;gap:5px; }
+    .filter-field label { font-size:10px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3); }
+    .filter-field input,.filter-field select { background:var(--bg-2);border:1px solid var(--border);border-radius:8px;padding:8px 11px;color:var(--text);font-size:12px;font-family:var(--sans);transition:border-color .18s; }
+    .filter-field input:focus,.filter-field select:focus { border-color:var(--primary);outline:none; }
+
+    /* Summary pills */
+    .sum-pills { display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px; }
+    .sum-pill { padding:10px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;text-align:center;min-width:80px; }
+    .sum-pill .v { font-size:18px;font-weight:800;font-family:var(--mono); }
+    .sum-pill .l { font-size:10px;color:var(--text-2);text-transform:uppercase;letter-spacing:.04em; }
+
+    /* Table row hover */
+    tbody tr { transition:background .12s; }
+    tbody tr:hover { background:rgba(14,165,233,.04); }
+
+    /* Conf bar inline */
+    .conf-inline { display:flex;align-items:center;gap:6px; }
+    .conf-bar { width:44px;height:4px;border-radius:99px;background:var(--border);overflow:hidden; }
+    .conf-fill { height:100%;border-radius:99px;background:var(--success); }
+
+    /* Pager */
+    .pager { display:flex;align-items:center;gap:8px;justify-content:flex-end;padding:14px 20px;border-top:1px solid var(--border); }
+    .pager span { font-size:12px;color:var(--text-2); }
+
+    /* Empty state */
+    .empty { text-align:center;padding:56px 20px;color:var(--text-2); }
+    .empty i { font-size:40px;display:block;margin-bottom:14px;color:var(--border); }
+    .empty p { font-size:14px; }
+  
+    @media(max-width:640px){
+      .filters{gap:8px;}
+      .filter-field input,.filter-field select{font-size:13px;padding:8px 10px;}
+      .sum-pills{gap:6px;}
+      .sum-pill{padding:8px 10px;min-width:60px;}
+      .sum-pill .v{font-size:16px;}
+      .pager{padding:10px 14px;flex-wrap:wrap;gap:8px;}
+    }
+
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar" id="topbar"></header>
+    <div class="content-area">
+
+      <!-- Filters -->
+      <div class="filters">
+        <div class="filter-field">
+          <label>From Date</label>
+          <input type="date" id="f_start"/>
+        </div>
+        <div class="filter-field">
+          <label>To Date</label>
+          <input type="date" id="f_end"/>
+        </div>
+        <div class="filter-field">
+          <label>Class</label>
+          <select id="f_class" style="min-width:140px;"><option value="">All Classes</option></select>
+        </div>
+        <div class="filter-field">
+          <label>Status</label>
+          <select id="f_status">
+            <option value="">All</option><option value="present">Present</option>
+            <option value="late">Late</option><option value="absent">Absent</option>
+          </select>
+        </div>
+        <div class="filter-field">
+          <label>Roll No.</label>
+          <input type="text" id="f_roll" placeholder="e.g. 2024001" style="width:120px;"/>
+        </div>
+        <div style="display:flex;gap:8px;padding-bottom:1px;">
+          <button class="btn btn-primary" onclick="search()"><i class="fas fa-magnifying-glass"></i> Search</button>
+          <button class="btn btn-ghost" onclick="resetFilters()"><i class="fas fa-times"></i></button>
+          <button class="btn btn-success" onclick="exportCSV()" id="exportBtn" disabled style="opacity:.4;"><i class="fas fa-file-csv"></i> Export</button>
+        </div>
+      </div>
+
+      <!-- Summary -->
+      <div class="sum-pills" id="sumPills" style="display:none;"></div>
+
+      <!-- Table -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-clock-rotate-left"></i> Attendance Records</div>
+          <span id="recCount" class="mono" style="color:var(--text-2);font-size:12px;"></span>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>#</th><th>Date</th><th>Student</th><th>Roll No.</th>
+                  <th>Class</th><th>Time</th><th>Confidence</th><th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="histTbl">
+                <tr><td colspan="8"><div class="empty"><i class="fas fa-magnifying-glass"></i><p>Apply filters and click Search</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="pager" id="pager"></div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/sidebar.js"></script>
+<script>
+requireAuth();
+buildLayout('history','Attendance History','RECORDS');
+
+let allData=[], page=1;
+const PER=40;
+
+// Init dates & class dropdown
+const today=new Date(),last7=new Date(today);last7.setDate(today.getDate()-7);
+document.getElementById('f_end').value=today.toISOString().split('T')[0];
+document.getElementById('f_start').value=last7.toISOString().split('T')[0];
+
+(async()=>{
+  try{
+    const cls=await API.getClasses();
+    document.getElementById('f_class').innerHTML='<option value="">All Classes</option>'+cls.map(c=>`<option value="${c.class_name}">${c.class_name}</option>`).join('');
+  }catch(e){}
+  search(); // auto-load
+})();
+
+async function search(){
+  const params={};
+  const s=document.getElementById('f_start').value,e=document.getElementById('f_end').value;
+  const cls=document.getElementById('f_class').value,st=document.getElementById('f_status').value;
+  const roll=document.getElementById('f_roll').value.trim();
+  if(s)params.start_date=s;if(e)params.end_date=e;if(cls)params.class_name=cls;
+  if(st)params.status=st;if(roll)params.roll_number=roll;
+  params.per_page=200;
+
+  document.getElementById('histTbl').innerHTML='<tr><td colspan="8"><div class="empty"><i class="fas fa-spinner fa-spin"></i><p>Loading…</p></div></td></tr>';
+
+  try{
+    const res=await API.getAttendanceHistory(params);
+    allData=res;page=1;
+    renderSummary(allData);renderTable();
+    const exportBtn=document.getElementById('exportBtn');
+    exportBtn.disabled=!allData.length;exportBtn.style.opacity=allData.length?'1':'.4';
+  }catch(err){showToast('Error: '+err.message,'error');}
+}
+
+function renderSummary(data){
+  const present=data.filter(r=>r.status==='present').length;
+  const late   =data.filter(r=>r.status==='late').length;
+  const absent =data.filter(r=>r.status==='absent').length;
+  const unique =new Set(data.map(r=>r.student_id)).size;
+  const avgConf=data.filter(r=>r.confidence).length?
+    Math.round(data.filter(r=>r.confidence).reduce((a,r)=>a+r.confidence,0)/data.filter(r=>r.confidence).length):0;
+
+  document.getElementById('recCount').textContent=`${data.length} records`;
+  document.getElementById('sumPills').style.display='flex';
+  document.getElementById('sumPills').innerHTML=[
+    {v:data.length,l:'Total',    c:'var(--primary)'},
+    {v:present,    l:'Present',  c:'var(--success)'},
+    {v:late,       l:'Late',     c:'var(--warning)'},
+    {v:absent,     l:'Absent',   c:'var(--danger)'},
+    {v:unique,     l:'Students', c:'var(--cyan)'},
+    {v:avgConf+'%',l:'Avg Conf', c:'var(--text)'},
+  ].map(x=>`<div class="sum-pill"><div class="v" style="color:${x.c};">${x.v}</div><div class="l">${x.l}</div></div>`).join('');
+}
+
+function renderTable(){
+  const offset=(page-1)*PER,slice=allData.slice(offset,offset+PER);
+  if(!slice.length){
+    document.getElementById('histTbl').innerHTML='<tr><td colspan="8"><div class="empty"><i class="fas fa-inbox"></i><p>No records found</p></div></td></tr>';
+    document.getElementById('pager').innerHTML='';return;
+  }
+  const statusCls={present:'badge-success',late:'badge-warning',absent:'badge-danger'};
+  document.getElementById('histTbl').innerHTML=slice.map((r,i)=>{
+    const s=r.students||{},init=initials(s.name||'?');
+    const conf=r.confidence||0;
+    return `<tr>
+      <td class="mono" style="color:var(--text-2);font-size:11px;">${offset+i+1}</td>
+      <td class="mono" style="font-size:12px;">${formatDate(r.date)}</td>
+      <td><div style="display:flex;align-items:center;gap:8px;"><div class="avatar avatar-sm">${init}</div><span style="font-weight:600;font-size:13px;">${s.name||'—'}</span></div></td>
+      <td class="mono" style="color:var(--text-2);font-size:12px;">${s.roll_number||'—'}</td>
+      <td style="font-size:12px;">${s.class||'—'}</td>
+      <td class="mono" style="font-weight:600;font-size:12px;">${formatTime(r.time)}</td>
+      <td>
+        ${conf>0?`<div class="conf-inline"><div class="conf-bar"><div class="conf-fill" style="width:${conf}%;"></div></div><span class="mono" style="font-size:11px;color:var(--success);">${conf}%</span></div>`:'<span style="color:var(--text-3);">—</span>'}
+      </td>
+      <td><span class="badge ${statusCls[r.status]||'badge-muted'}">${r.status}</span></td>
+    </tr>`;
+  }).join('');
+
+  const pages=Math.ceil(allData.length/PER);
+  document.getElementById('pager').innerHTML = pages<=1?'': `
+    <button class="btn btn-ghost btn-sm" onclick="page=${Math.max(1,page-1)};renderTable();" ${page<=1?'disabled':''}>‹ Prev</button>
+    <span>Page <strong>${page}</strong> of ${pages}</span>
+    <button class="btn btn-ghost btn-sm" onclick="page=${Math.min(pages,page+1)};renderTable();" ${page>=pages?'disabled':''}>Next ›</button>`;
+}
+
+function resetFilters(){
+  document.getElementById('f_class').value='';document.getElementById('f_status').value='';
+  document.getElementById('f_roll').value='';
+  allData=[];page=1;
+  document.getElementById('histTbl').innerHTML='<tr><td colspan="8"><div class="empty"><i class="fas fa-magnifying-glass"></i><p>Apply filters and click Search</p></div></td></tr>';
+  document.getElementById('sumPills').style.display='none';document.getElementById('recCount').textContent='';
+  document.getElementById('pager').innerHTML='';
+  document.getElementById('exportBtn').disabled=true;document.getElementById('exportBtn').style.opacity='.4';
+}
+
+function exportCSV(){
+  if(!allData.length){showToast('No data','warning');return;}
+  const h=['#','Date','Name','Roll No.','Class','Time','Confidence','Status'];
+  const rows=allData.map((r,i)=>{const s=r.students||{};return[i+1,r.date,s.name||'',s.roll_number||'',s.class||'',r.time,r.confidence||'',r.status];});
+  const csv=[h,...rows].map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`attendance_history_${new Date().toISOString().split('T')[0]}.csv`;a.click();
+  showToast(`Exported ${allData.length} records`,'success');
+}
+</script>
+</body>
+</html>

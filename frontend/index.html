@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>AI Face Attendance — Login</title>
+  <link rel="stylesheet" href="css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    body { display:flex; align-items:center; justify-content:center; min-height:100vh; overflow:hidden; }
+
+    .bg-mesh {
+      position:fixed; inset:0; z-index:0;
+      background: radial-gradient(ellipse 80% 60% at 20% 30%, rgba(14,165,233,.08) 0%, transparent 60%),
+                  radial-gradient(ellipse 60% 50% at 80% 70%, rgba(34,211,238,.05) 0%, transparent 60%),
+                  var(--bg);
+    }
+    .bg-grid {
+      position:absolute; inset:0;
+      background-image: linear-gradient(rgba(255,255,255,.03) 1px, transparent 1px),
+                        linear-gradient(90deg, rgba(255,255,255,.03) 1px, transparent 1px);
+      background-size: 48px 48px;
+    }
+    .bg-dot { position:absolute; border-radius:50%; filter:blur(80px); animation:drift 12s ease-in-out infinite; }
+    .bg-dot-1 { width:400px;height:400px; background:rgba(14,165,233,.06); top:-10%; left:-5%; }
+    .bg-dot-2 { width:300px;height:300px; background:rgba(34,211,238,.04); bottom:5%; right:-5%; animation-delay:-6s; }
+    @keyframes drift { 0%,100%{transform:translate(0,0)} 50%{transform:translate(20px,-20px)} }
+
+    .login-panel { position:relative; z-index:1; width:100%; max-width:420px; padding:20px; }
+
+    .login-brand { text-align:center; margin-bottom:28px; animation: fadeDown .5s ease both; }
+    @keyframes fadeDown { from{opacity:0;transform:translateY(-12px)} to{opacity:1;transform:translateY(0)} }
+    .brand-icon {
+      width:64px; height:64px; border-radius:18px; margin:0 auto 14px;
+      background:linear-gradient(135deg,var(--primary),var(--cyan));
+      display:flex; align-items:center; justify-content:center;
+      font-size:26px; color:#fff;
+      box-shadow: 0 8px 32px rgba(14,165,233,.4);
+    }
+    .brand-name  { font-size:22px; font-weight:800; }
+    .brand-name span { color:var(--primary); }
+    .brand-sub   { font-size:13px; color:var(--text-2); margin-top:4px; }
+
+    .login-card {
+      background:var(--surface); border:1px solid var(--border);
+      border-radius:var(--radius-lg); padding:30px;
+      box-shadow:0 20px 60px rgba(0,0,0,.6);
+      animation: fadeUp .5s ease .1s both;
+    }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+
+    .section-label {
+      font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+      color:var(--text-2); margin-bottom:18px; display:flex; align-items:center; gap:8px;
+    }
+    .section-label i { color:var(--primary); }
+
+    .field { margin-bottom:14px; }
+    .field label { display:block; font-size:11px; font-weight:600; color:var(--text-2); margin-bottom:6px; letter-spacing:.03em; }
+    .field-inner { position:relative; }
+    .field-inner input {
+      width:100%; padding:12px 14px 12px 40px;
+      background:var(--bg-2); border:1px solid var(--border);
+      border-radius:9px; color:var(--text); font-size:14px; font-family:var(--sans);
+      transition:border-color .18s, box-shadow .18s;
+    }
+    .field-inner input:focus {
+      border-color:var(--primary); outline:none;
+      box-shadow:0 0 0 3px rgba(14,165,233,.12);
+    }
+    .field-inner input::placeholder { color:var(--text-3); }
+    .field-icon { position:absolute; left:13px; top:50%; transform:translateY(-50%); color:var(--text-3); font-size:13px; pointer-events:none; }
+    .eye-toggle { position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; color:var(--text-3); font-size:13px; padding:4px 6px; border-radius:5px; transition:color .15s; }
+    .eye-toggle:hover { color:var(--text); }
+
+    .login-btn {
+      width:100%; padding:13px; margin-top:6px; border-radius:10px; border:none;
+      background:linear-gradient(135deg, var(--primary), var(--cyan));
+      color:#fff; font-size:14px; font-weight:700; font-family:var(--sans);
+      cursor:pointer; transition:all .2s;
+      box-shadow:0 4px 18px rgba(14,165,233,.35);
+      position:relative; overflow:hidden;
+    }
+    .login-btn:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 8px 28px rgba(14,165,233,.45); }
+    .login-btn:disabled { opacity:.5; cursor:not-allowed; transform:none; }
+    .btn-shine {
+      position:absolute; top:0; left:-100%; width:60%; height:100%;
+      background:linear-gradient(90deg, transparent, rgba(255,255,255,.15), transparent);
+      transform:skewX(-20deg); animation:shine 3s infinite 1.5s;
+    }
+    @keyframes shine { 0%,100%{left:-100%} 40%,60%{left:150%} }
+
+    .hint-box { text-align:center; margin-top:14px; }
+    .hint-box kbd {
+      background:var(--bg-2); border:1px solid var(--border);
+      border-radius:5px; padding:2px 8px;
+      font-family:var(--mono); font-size:11px; color:var(--text-2);
+    }
+    .hint-box small { font-size:12px; color:var(--text-3); }
+
+    /* Error box */
+    .err-box {
+      display:none; align-items:flex-start; gap:10px;
+      padding:12px 14px; border-radius:9px; margin-bottom:14px;
+      background:rgba(244,63,94,.1); border:1px solid rgba(244,63,94,.25);
+      color:#fb7185; font-size:13px;
+    }
+    .err-box i { flex-shrink:0; margin-top:1px; }
+
+    /* Server status */
+    .srv-status {
+      display:flex; align-items:center; justify-content:center; gap:7px;
+      margin-top:16px; font-size:12px; color:var(--text-3);
+      animation: fadeUp .5s ease .2s both;
+    }
+    .srv-dot { width:7px; height:7px; border-radius:50%; }
+    .srv-dot.online  { background:var(--success); animation:pulse 2s infinite; }
+    .srv-dot.offline { background:var(--danger); }
+    .srv-dot.checking{ background:var(--warning); animation:pulse 1s infinite; }
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+    /* Troubleshoot box */
+    .trouble {
+      margin-top:12px; padding:12px 14px; background:var(--bg-2);
+      border:1px solid var(--border); border-radius:9px;
+      font-size:12px; color:var(--text-2); line-height:1.8; display:none;
+    }
+    .trouble .t-title { font-weight:700; color:var(--text); margin-bottom:6px; }
+  </style>
+</head>
+<body>
+  <div class="bg-mesh">
+    <div class="bg-grid"></div>
+    <div class="bg-dot bg-dot-1"></div>
+    <div class="bg-dot bg-dot-2"></div>
+  </div>
+
+  <div class="login-panel">
+    <div class="login-brand">
+      <div class="brand-icon"><i class="fas fa-brain"></i></div>
+      <div class="brand-name">AI <span>Face</span> Attendance</div>
+      <div class="brand-sub">Biometric Recognition System</div>
+    </div>
+
+    <div class="login-card">
+      <div class="section-label">
+        <i class="fas fa-shield-halved"></i> Admin Authentication
+      </div>
+
+      <!-- Error display -->
+      <div class="err-box" id="errBox">
+        <i class="fas fa-exclamation-circle"></i>
+        <div id="errMsg">Login failed</div>
+      </div>
+
+      <!-- Username -->
+      <div class="field">
+        <label>Username</label>
+        <div class="field-inner">
+          <i class="fas fa-user field-icon"></i>
+          <input type="text" id="inpUser" placeholder="Enter username" autocomplete="username"/>
+        </div>
+      </div>
+
+      <!-- Password -->
+      <div class="field">
+        <label>Password</label>
+        <div class="field-inner">
+          <i class="fas fa-lock field-icon"></i>
+          <input type="password" id="inpPass" placeholder="Enter password" autocomplete="current-password"/>
+          <button class="eye-toggle" type="button" onclick="toggleEye()" tabindex="-1">
+            <i class="fas fa-eye" id="eyeIco"></i>
+          </button>
+        </div>
+      </div>
+
+      <button class="login-btn" id="loginBtn" onclick="doLogin()">
+        <div class="btn-shine"></div>
+        <span id="btnTxt"><i class="fas fa-right-to-bracket"></i>&nbsp; Sign In</span>
+      </button>
+
+      <div class="hint-box">
+        <small>Default &nbsp;<kbd>admin</kbd> / <kbd>admin123</kbd></small>
+      </div>
+
+      <!-- Troubleshoot panel (shown after error) -->
+      <div class="trouble" id="troubleBox">
+        <div class="t-title"><i class="fas fa-wrench"></i> Troubleshooting</div>
+        <div>1️⃣ Make sure backend is running: <code style="font-family:var(--mono);background:rgba(14,165,233,.1);padding:1px 5px;border-radius:3px;">python main.py</code></div>
+        <div>2️⃣ Backend should be on <code style="font-family:var(--mono);">http://localhost:8000</code></div>
+        <div>3️⃣ Default login: <strong>admin</strong> / <strong>admin123</strong></div>
+        <div>4️⃣ Check browser console (F12) for network errors</div>
+        <div>5️⃣ Make sure CORS is allowed in <code style="font-family:var(--mono);">main.py</code></div>
+      </div>
+    </div>
+
+    <!-- Server status -->
+    <div class="srv-status">
+      <div class="srv-dot checking" id="srvDot"></div>
+      <span id="srvTxt">Checking server…</span>
+    </div>
+  </div>
+
+  <script src="js/config.js"></script>
+  <script src="dashboard.js"></script>  <!-- ya jo bhi fetch karta hai -->
+  <script src="js/api.js"></script>
+  <script>
+    // ── Redirect if already logged in ──
+    if (localStorage.getItem('token')) {
+      location.href = 'pages/dashboard.html';
+    }
+
+    // ── Server status check ────────────
+    async function checkServer() {
+      const dot = document.getElementById('srvDot');
+      const txt = document.getElementById('srvTxt');
+      try {
+        const r = await fetch('http://localhost:8000/', { method: 'GET', signal: AbortSignal.timeout(4000) });
+        if (r.ok) {
+          dot.className = 'srv-dot online';
+          txt.textContent = `Server online — ${window.BACKEND_URL || 'localhost:8000'}`;
+        } else {
+          dot.className = 'srv-dot offline';
+          txt.textContent = 'Server error (HTTP ' + r.status + ')';
+        }
+      } catch(e) {
+        dot.className = 'srv-dot offline';
+        txt.textContent = `Server offline at ${window.BACKEND_URL || 'localhost:8000'}`;
+        showErr('⚠️ Backend server not reachable at localhost:8000. Start the server first: python main.py');
+        document.getElementById('troubleBox').style.display = 'block';
+      }
+    }
+    checkServer();
+
+    // ── Enter key support ──────────────
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+
+    // ── Toggle password visibility ─────
+    function toggleEye() {
+      const inp  = document.getElementById('inpPass');
+      const icon = document.getElementById('eyeIco');
+      if (inp.type === 'password') {
+        inp.type = 'text';
+        icon.className = 'fas fa-eye-slash';
+      } else {
+        inp.type = 'password';
+        icon.className = 'fas fa-eye';
+      }
+    }
+
+    // ── Show error ─────────────────────
+    function showErr(msg) {
+      const box = document.getElementById('errBox');
+      document.getElementById('errMsg').innerHTML = msg;
+      box.style.display = 'flex';
+    }
+
+    function hideErr() {
+      document.getElementById('errBox').style.display = 'none';
+    }
+
+    // ── Login ──────────────────────────
+    async function doLogin() {
+      const btn  = document.getElementById('loginBtn');
+      const txt  = document.getElementById('btnTxt');
+      const user = document.getElementById('inpUser').value.trim();
+      const pass = document.getElementById('inpPass').value;
+
+      hideErr();
+
+      if (!user) { showErr('Please enter your username'); return; }
+      if (!pass) { showErr('Please enter your password'); return; }
+
+      btn.disabled = true;
+      txt.innerHTML = '<i class="fas fa-spinner fa-spin"></i>&nbsp; Authenticating…';
+
+      try {
+        console.log('[Login] Using backend:', window.BACKEND_URL);
+        const data = await API.login(user, pass);
+
+        // Success!
+        localStorage.setItem('token', data.access_token);
+        localStorage.setItem('adminUser', data.username);
+        txt.innerHTML = '<i class="fas fa-check"></i>&nbsp; Login successful!';
+        btn.style.background = 'linear-gradient(135deg, var(--success), #34d399)';
+
+        setTimeout(() => {
+          location.href = 'pages/dashboard.html';
+        }, 600);
+
+      } catch(err) {
+        btn.disabled = false;
+        txt.innerHTML = '<i class="fas fa-right-to-bracket"></i>&nbsp; Sign In';
+
+        // Show detailed error
+        let msg = err.message || 'Login failed';
+        if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch')) {
+          const burl = window.BACKEND_URL || 'localhost:8000';
+          msg = `❌ Cannot connect to backend at <strong>${burl}</strong>. Make sure backend server is running.`;
+          document.getElementById('troubleBox').style.display = 'block';
+        } else if (msg.includes('401') || msg.toLowerCase().includes('invalid') || msg.toLowerCase().includes('unauthorized')) {
+          msg = '❌ Wrong username or password. Default is <strong>admin / admin123</strong>';
+        }
+        showErr(msg);
+      }
+    }
+  </script>
+</body>
+</html>
+<style id="loginMobile">
+@media(max-width:480px){
+  .login-panel{padding:16px;}
+  .login-card{padding:22px 18px;}
+  .brand-icon{width:52px;height:52px;font-size:22px;}
+  .brand-name{font-size:18px;}
+  .login-btn{padding:12px;}
+}
+</style>

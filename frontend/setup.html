@@ -1,0 +1,694 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>⚙️ Supabase Setup — AI Face Attendance</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Sora:wght@400;600;700;800&family=DM+Mono:wght@400;500&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0;}
+    body{font-family:'Sora',sans-serif;background:#07090f;color:#e2e8f0;min-height:100vh;padding:0;}
+    
+    /* Header */
+    .header{background:#111827;border-bottom:1px solid #1e2d40;padding:16px 28px;display:flex;align-items:center;gap:14px;}
+    .logo{width:40px;height:40px;border-radius:10px;background:linear-gradient(135deg,#0ea5e9,#22d3ee);display:flex;align-items:center;justify-content:center;font-size:18px;}
+    .header h1{font-size:17px;font-weight:700;}
+    .header p{font-size:12px;color:#64748b;margin-top:2px;}
+
+    /* Layout */
+    .page{display:flex;min-height:calc(100vh - 73px);}
+    .steps-nav{width:220px;background:#0c1018;border-right:1px solid #1e2d40;padding:20px 12px;flex-shrink:0;}
+    .main{flex:1;padding:28px 32px;max-width:760px;}
+
+    /* Steps nav */
+    .step-nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:9px;margin-bottom:4px;cursor:pointer;transition:all .18s;font-size:13px;color:#64748b;}
+    .step-nav-item:hover{background:rgba(14,165,233,.06);color:#94a3b8;}
+    .step-nav-item.active{background:rgba(14,165,233,.12);color:#38bdf8;}
+    .step-nav-item.done{color:#34d399;}
+    .step-num{width:24px;height:24px;border-radius:50%;background:#1a2332;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;font-family:'DM Mono',monospace;}
+    .step-nav-item.active .step-num{background:#0ea5e9;color:#fff;}
+    .step-nav-item.done .step-num{background:#10b981;color:#fff;}
+
+    /* Cards */
+    .card{background:#111827;border:1px solid #1e2d40;border-radius:14px;margin-bottom:20px;overflow:hidden;}
+    .card-head{padding:16px 22px;border-bottom:1px solid #1e2d40;display:flex;align-items:center;gap:12px;}
+    .card-head h2{font-size:15px;font-weight:700;}
+    .card-head p{font-size:12px;color:#64748b;margin-top:2px;}
+    .card-body{padding:22px;}
+
+    /* Status badge */
+    .status{display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:99px;font-size:12px;font-weight:600;font-family:'DM Mono',monospace;}
+    .status.ok{background:rgba(16,185,129,.15);color:#34d399;border:1px solid rgba(16,185,129,.25);}
+    .status.err{background:rgba(244,63,94,.15);color:#fb7185;border:1px solid rgba(244,63,94,.25);}
+    .status.pending{background:rgba(14,165,233,.15);color:#38bdf8;border:1px solid rgba(14,165,233,.25);}
+    .status.warn{background:rgba(245,158,11,.15);color:#fbbf24;border:1px solid rgba(245,158,11,.25);}
+
+    /* Buttons */
+    .btn{display:inline-flex;align-items:center;gap:8px;padding:10px 20px;border-radius:9px;font-size:13px;font-weight:700;cursor:pointer;border:none;font-family:'Sora',sans-serif;transition:all .2s;}
+    .btn-primary{background:#0ea5e9;color:#fff;box-shadow:0 4px 14px rgba(14,165,233,.3);}
+    .btn-primary:hover:not(:disabled){background:#38bdf8;transform:translateY(-1px);}
+    .btn-success{background:#10b981;color:#fff;box-shadow:0 4px 14px rgba(16,185,129,.3);}
+    .btn-success:hover:not(:disabled){background:#34d399;transform:translateY(-1px);}
+    .btn-ghost{background:transparent;color:#94a3b8;border:1px solid #1e2d40;}
+    .btn-ghost:hover:not(:disabled){background:#1a2332;color:#e2e8f0;}
+    .btn:disabled{opacity:.4;cursor:not-allowed;transform:none!important;}
+    .btn-sm{padding:7px 14px;font-size:12px;border-radius:7px;}
+
+    /* Log lines */
+    .log{margin-top:14px;display:flex;flex-direction:column;gap:6px;}
+    .ll{display:flex;align-items:flex-start;gap:10px;padding:9px 13px;border-radius:8px;font-size:13px;line-height:1.5;}
+    .ll.ok{background:rgba(16,185,129,.08);color:#34d399;border-left:3px solid #10b981;}
+    .ll.err{background:rgba(244,63,94,.08);color:#fb7185;border-left:3px solid #f43f5e;}
+    .ll.info{background:rgba(14,165,233,.08);color:#38bdf8;border-left:3px solid #0ea5e9;}
+    .ll.warn{background:rgba(245,158,11,.08);color:#fbbf24;border-left:3px solid #f59e0b;}
+    .ll .ico{flex-shrink:0;width:18px;}
+
+    /* Info boxes */
+    .info-box{background:#0c1018;border:1px solid #1e2d40;border-radius:10px;padding:14px 16px;font-size:13px;color:#94a3b8;line-height:1.8;margin-bottom:14px;}
+    .info-box strong{color:#e2e8f0;}
+    .info-box code{font-family:'DM Mono',monospace;background:rgba(14,165,233,.12);padding:1px 6px;border-radius:4px;color:#38bdf8;font-size:12px;}
+
+    /* SQL box */
+    .sql-box{background:#0a0e1a;border:1px solid #1e2d40;border-radius:10px;padding:14px;font-family:'DM Mono',monospace;font-size:11px;color:#94a3b8;white-space:pre;overflow-x:auto;max-height:280px;overflow-y:auto;line-height:1.7;}
+
+    /* Highlight keywords */
+    .kw{color:#38bdf8;}
+    .cm{color:#475569;}
+
+    /* Steps */
+    .step-row{display:flex;align-items:flex-start;gap:14px;margin-bottom:18px;}
+    .step-circle{width:32px;height:32px;border-radius:50%;background:#1a2332;border:2px solid #1e2d40;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:800;flex-shrink:0;font-family:'DM Mono',monospace;color:#64748b;}
+    .step-circle.active{border-color:#0ea5e9;color:#0ea5e9;background:rgba(14,165,233,.1);}
+    .step-circle.done{border-color:#10b981;background:#10b981;color:#fff;}
+    .step-content{flex:1;padding-top:4px;}
+    .step-title{font-weight:700;font-size:14px;margin-bottom:4px;}
+    .step-desc{font-size:13px;color:#64748b;line-height:1.6;}
+
+    /* Screenshot guide */
+    .img-guide{background:#0c1018;border:1px solid #243447;border-radius:10px;padding:16px;margin-bottom:12px;}
+    .img-guide .arrow{font-size:13px;color:#38bdf8;margin-bottom:6px;font-weight:700;}
+    .mock-ui{background:#07090f;border:1px solid #1e2d40;border-radius:8px;padding:12px;font-family:'DM Mono',monospace;font-size:12px;color:#64748b;}
+    .mock-active{color:#38bdf8;font-weight:700;}
+    .mock-btn{display:inline-block;background:#0ea5e9;color:#fff;padding:3px 10px;border-radius:5px;font-size:11px;}
+    .mock-input{background:#111827;border:1px solid #1e2d40;border-radius:5px;padding:4px 8px;color:#94a3b8;font-size:11px;display:inline-block;min-width:200px;}
+
+    /* Progress bar */
+    .progress-wrap{background:#1a2332;border-radius:99px;height:8px;overflow:hidden;margin:10px 0;}
+    .progress-fill{height:100%;border-radius:99px;background:linear-gradient(90deg,#0ea5e9,#22d3ee);transition:width .5s ease;}
+
+    /* Overall status */
+    .overall{display:flex;align-items:center;gap:16px;padding:16px 20px;border-radius:12px;margin-bottom:24px;background:#111827;border:1px solid #1e2d40;}
+    .overall-icon{font-size:28px;}
+    .overall-title{font-size:16px;font-weight:700;}
+    .overall-sub{font-size:12px;color:#64748b;margin-top:3px;}
+
+    /* Table display */
+    .data-table{width:100%;border-collapse:collapse;font-size:12px;font-family:'DM Mono',monospace;}
+    .data-table th{padding:8px 12px;text-align:left;color:#475569;background:#0c1018;border-bottom:1px solid #1e2d40;font-size:10px;text-transform:uppercase;letter-spacing:.06em;}
+    .data-table td{padding:8px 12px;border-bottom:1px solid rgba(255,255,255,.03);color:#94a3b8;}
+    .data-table tr:last-child td{border-bottom:none;}
+    .data-table tr:hover td{background:rgba(255,255,255,.02);}
+
+    .spinner{animation:spin 1s linear infinite;display:inline-block;}
+    @keyframes spin{to{transform:rotate(360deg)}}
+
+    @media(max-width:700px){
+      .steps-nav{display:none;}
+      .main{padding:16px;}
+    }
+  </style>
+</head>
+<body>
+
+<!-- Header -->
+<div class="header">
+  <div class="logo">🧠</div>
+  <div>
+    <h1>Supabase Database Setup</h1>
+    <p>AI Face Attendance System — Connection Guide</p>
+  </div>
+  <div style="margin-left:auto;">
+    <a href="index.html" class="btn btn-ghost btn-sm">← Back to App</a>
+  </div>
+</div>
+
+<div class="page">
+  <!-- Steps nav -->
+  <div class="steps-nav">
+    <div style="font-size:10px;font-weight:700;color:#475569;letter-spacing:.1em;text-transform:uppercase;margin-bottom:14px;padding:0 10px;">Setup Steps</div>
+    <div class="step-nav-item active" id="nav1" onclick="scrollTo('s1')">
+      <div class="step-num">1</div> Check Connection
+    </div>
+    <div class="step-nav-item" id="nav2" onclick="scrollTo('s2')">
+      <div class="step-num">2</div> Create Tables
+    </div>
+    <div class="step-nav-item" id="nav3" onclick="scrollTo('s3')">
+      <div class="step-num">3</div> Disable RLS
+    </div>
+    <div class="step-nav-item" id="nav4" onclick="scrollTo('s4')">
+      <div class="step-num">4</div> Test Insert
+    </div>
+    <div class="step-nav-item" id="nav5" onclick="scrollTo('s5')">
+      <div class="step-num">5</div> View Data
+    </div>
+  </div>
+
+  <!-- Main content -->
+  <div class="main">
+
+    <!-- Overall status -->
+    <div class="overall" id="overallBox">
+      <div class="overall-icon">⏳</div>
+      <div>
+        <div class="overall-title" id="overallTitle">Running checks…</div>
+        <div class="overall-sub" id="overallSub">Testing Supabase connection</div>
+      </div>
+      <div style="margin-left:auto;">
+        <span class="status pending" id="overallBadge">Checking</span>
+      </div>
+    </div>
+    <div class="progress-wrap"><div class="progress-fill" id="progressBar" style="width:0%"></div></div>
+
+    <!-- ══════════════════════════════════ -->
+    <!-- STEP 1: Connection Test           -->
+    <!-- ══════════════════════════════════ -->
+    <div id="s1">
+    <div class="card">
+      <div class="card-head">
+        <div style="font-size:24px;">🔌</div>
+        <div>
+          <h2>Step 1 — Supabase Connection Test</h2>
+          <p>Checking if browser can reach your Supabase project</p>
+        </div>
+        <div style="margin-left:auto;"><span class="status pending" id="s1badge">Testing…</span></div>
+      </div>
+      <div class="card-body">
+        <div class="info-box">
+          <strong>Your Supabase Project:</strong><br/>
+          URL: <code>https://xuduzaibuefetuvbzgpb.supabase.co</code><br/>
+          Key: <code>eyJhbGci…Pj_Y</code> (anon key)
+        </div>
+        <button class="btn btn-primary" onclick="testConnection()" id="btnConn">
+          <span class="spinner" id="connSpin" style="display:none;">⟳</span>
+          🔌 Test Connection
+        </button>
+        <div class="log" id="connLog"></div>
+      </div>
+    </div>
+    </div>
+
+    <!-- ══════════════════════════════════ -->
+    <!-- STEP 2: Create Tables             -->
+    <!-- ══════════════════════════════════ -->
+    <div id="s2">
+    <div class="card">
+      <div class="card-head">
+        <div style="font-size:24px;">🗄️</div>
+        <div>
+          <h2>Step 2 — Create Tables in Supabase</h2>
+          <p>Tables banana zaroori hai — warna data save nahi hoga</p>
+        </div>
+        <div style="margin-left:auto;"><span class="status pending" id="s2badge">Pending</span></div>
+      </div>
+      <div class="card-body">
+
+        <!-- Visual guide -->
+        <div class="info-box">
+          <strong>Yeh karna hai:</strong><br/>
+          1️⃣ <a href="https://supabase.com/dashboard" target="_blank" style="color:#38bdf8;">supabase.com/dashboard</a> pe jao<br/>
+          2️⃣ Apna project open karo<br/>
+          3️⃣ Left sidebar mein <strong>SQL Editor</strong> click karo<br/>
+          4️⃣ Neeche wala SQL paste karo<br/>
+          5️⃣ <strong>Run</strong> button dabao
+        </div>
+
+        <!-- Supabase UI mockup -->
+        <div class="img-guide">
+          <div class="arrow">👇 Supabase dashboard mein kuch aisa dikhega:</div>
+          <div class="mock-ui">
+            <div style="display:flex;gap:16px;">
+              <div style="width:140px;border-right:1px solid #1e2d40;padding-right:12px;line-height:2.2;">
+                <div>📊 Table Editor</div>
+                <div class="mock-active">✏️ SQL Editor  ←</div>
+                <div>📁 Storage</div>
+                <div>🔐 Authentication</div>
+              </div>
+              <div style="flex:1;">
+                <div style="margin-bottom:8px;font-size:11px;color:#38bdf8;">New Query</div>
+                <div class="mock-input">-- Paste SQL here and click Run</div>
+                <div style="margin-top:8px;"><span class="mock-btn">▶ Run</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- SQL to copy -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:13px;font-weight:700;color:#94a3b8;">SQL to run in Supabase:</div>
+          <button class="btn btn-success btn-sm" onclick="copySQL()">📋 Copy SQL</button>
+        </div>
+        <div class="sql-box" id="sqlDisplay"></div>
+
+        <div style="margin-top:14px;display:flex;gap:10px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="checkTables()" id="btnTables">
+            🔍 Check Tables
+          </button>
+          <a href="https://supabase.com/dashboard" target="_blank" class="btn btn-ghost">
+            🔗 Open Supabase Dashboard
+          </a>
+        </div>
+        <div class="log" id="tableLog"></div>
+      </div>
+    </div>
+    </div>
+
+    <!-- ══════════════════════════════════ -->
+    <!-- STEP 3: Fix RLS                   -->
+    <!-- ══════════════════════════════════ -->
+    <div id="s3">
+    <div class="card">
+      <div class="card-head">
+        <div style="font-size:24px;">🛡️</div>
+        <div>
+          <h2>Step 3 — Disable RLS (Row Level Security)</h2>
+          <p>RLS enable hone se inserts block ho jaate hain — yeh sabse common problem hai</p>
+        </div>
+        <div style="margin-left:auto;"><span class="status warn" id="s3badge">Important</span></div>
+      </div>
+      <div class="card-body">
+        <div class="info-box" style="border-color:rgba(245,158,11,.3);background:rgba(245,158,11,.05);">
+          <strong style="color:#fbbf24;">⚠️ RLS kya hai?</strong><br/>
+          Supabase automatically RLS (Row Level Security) enable karta hai. Iska matlab hai ki anon key se data insert/select nahi ho sakta jab tak explicitly allow na karo.<br/><br/>
+          <strong>Fix:</strong> Neeche ka SQL Supabase SQL Editor mein run karo
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+          <div style="font-size:13px;font-weight:700;color:#94a3b8;">RLS Disable SQL:</div>
+          <button class="btn btn-success btn-sm" onclick="copyRLS()">📋 Copy</button>
+        </div>
+        <div class="sql-box" id="rlsSql"></div>
+
+        <div style="margin-top:14px;">
+          <button class="btn btn-primary" onclick="checkRLS()">🔍 Check RLS Status</button>
+        </div>
+        <div class="log" id="rlsLog"></div>
+      </div>
+    </div>
+    </div>
+
+    <!-- ══════════════════════════════════ -->
+    <!-- STEP 4: Test Insert               -->
+    <!-- ══════════════════════════════════ -->
+    <div id="s4">
+    <div class="card">
+      <div class="card-head">
+        <div style="font-size:24px;">🧪</div>
+        <div>
+          <h2>Step 4 — Test Database Insert</h2>
+          <p>Ek test row insert karke confirm karo ki data save ho raha hai</p>
+        </div>
+        <div style="margin-left:auto;"><span class="status pending" id="s4badge">Pending</span></div>
+      </div>
+      <div class="card-body">
+        <button class="btn btn-primary" onclick="testInsert()" id="btnInsert">
+          🧪 Run Insert Test
+        </button>
+        <div class="log" id="insertLog"></div>
+      </div>
+    </div>
+    </div>
+
+    <!-- ══════════════════════════════════ -->
+    <!-- STEP 5: View Data                 -->
+    <!-- ══════════════════════════════════ -->
+    <div id="s5">
+    <div class="card">
+      <div class="card-head">
+        <div style="font-size:24px;">👁️</div>
+        <div>
+          <h2>Step 5 — View Database Data</h2>
+          <p>Dekho database mein kya kya data hai abhi</p>
+        </div>
+      </div>
+      <div class="card-body">
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;">
+          <button class="btn btn-primary btn-sm" onclick="viewTable('students')">👥 Students</button>
+          <button class="btn btn-primary btn-sm" onclick="viewTable('classes')">🏫 Classes</button>
+          <button class="btn btn-primary btn-sm" onclick="viewTable('attendance')">📋 Attendance</button>
+        </div>
+        <div id="viewLog"></div>
+        <div id="viewTable" style="display:none;margin-top:12px;overflow-x:auto;border-radius:10px;border:1px solid #1e2d40;"></div>
+      </div>
+    </div>
+    </div>
+
+    <!-- Final status -->
+    <div class="card" id="finalCard" style="display:none;">
+      <div class="card-body" id="finalBody" style="text-align:center;padding:32px;"></div>
+    </div>
+
+  </div><!-- /main -->
+</div><!-- /page -->
+
+<script src="js/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const URL  = "https://xuduzaibuefetuvbzgpb.supabase.co";
+const KEY  = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1ZHV6YWlidWVmZXR1dmJ6Z3BiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4MTM5NTUsImV4cCI6MjA4OTM4OTk1NX0.t_vKegFQy60r6_K2H4z_cDDc3L7Zk68ktJFRActPj_Y";
+const { createClient } = supabase;
+const db = createClient(URL, KEY);
+
+let progress = 0;
+const checks = { conn: false, tables: false, rls: false, insert: false };
+
+const MAIN_SQL = `-- ═══════════════════════════════════════════════
+-- Run this in: Supabase → SQL Editor → Run
+-- ═══════════════════════════════════════════════
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- Drop and recreate tables (clean setup)
+DROP TABLE IF EXISTS attendance;
+DROP TABLE IF EXISTS students;
+DROP TABLE IF EXISTS classes;
+
+CREATE TABLE classes (
+    id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    class_name VARCHAR(100) NOT NULL,
+    subject    VARCHAR(100) NOT NULL,
+    created_at TIMESTAMPTZ  DEFAULT NOW()
+);
+
+CREATE TABLE students (
+    id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name          VARCHAR(100) NOT NULL,
+    roll_number   VARCHAR(30)  UNIQUE NOT NULL,
+    class         VARCHAR(100),
+    face_encoding TEXT,
+    email         VARCHAR(100),
+    is_active     BOOLEAN DEFAULT TRUE,
+    created_at    TIMESTAMPTZ  DEFAULT NOW()
+);
+
+CREATE TABLE attendance (
+    id         UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    student_id UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    date       DATE        DEFAULT CURRENT_DATE,
+    time       TIME        DEFAULT CURRENT_TIME,
+    status     VARCHAR(10) DEFAULT 'present'
+               CHECK (status IN ('present','absent','late')),
+    confidence FLOAT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (student_id, date)
+);
+
+-- DISABLE RLS (VERY IMPORTANT!)
+ALTER TABLE classes    DISABLE ROW LEVEL SECURITY;
+ALTER TABLE students   DISABLE ROW LEVEL SECURITY;
+ALTER TABLE attendance DISABLE ROW LEVEL SECURITY;
+
+-- Sample classes
+INSERT INTO classes (class_name, subject) VALUES
+  ('Class 10-A', 'Mathematics'),
+  ('Class 10-B', 'Science'),
+  ('Class 11-A', 'Computer Science'),
+  ('Class 11-B', 'Physics'),
+  ('Class 12-A', 'Chemistry');
+
+SELECT 'Setup complete!' AS message;`;
+
+const RLS_SQL = `-- Run this if tables already exist but data not saving:
+ALTER TABLE classes    DISABLE ROW LEVEL SECURITY;
+ALTER TABLE students   DISABLE ROW LEVEL SECURITY;
+ALTER TABLE attendance DISABLE ROW LEVEL SECURITY;
+
+-- Verify
+SELECT tablename, rowsecurity 
+FROM pg_tables 
+WHERE tablename IN ('students','classes','attendance');`;
+
+// Render SQL with syntax highlight
+function renderSQL(id, sql) {
+  const el = document.getElementById(id);
+  el.innerHTML = sql
+    .replace(/--[^\n]*/g, m => `<span style="color:#475569;">${m}</span>`)
+    .replace(/\b(CREATE|TABLE|IF|NOT|EXISTS|INSERT|INTO|VALUES|SELECT|FROM|WHERE|ALTER|DISABLE|ROW|LEVEL|SECURITY|DROP|UNIQUE|DEFAULT|REFERENCES|ON|DELETE|CASCADE|PRIMARY|KEY|EXTENSION)\b/g,
+      m => `<span style="color:#38bdf8;">${m}</span>`)
+    .replace(/\b(UUID|VARCHAR|TEXT|BOOLEAN|FLOAT|DATE|TIME|TIMESTAMPTZ|INT)\b/g,
+      m => `<span style="color:#22d3ee;">${m}</span>`);
+}
+
+function log(id, type, ico, msg) {
+  document.getElementById(id).innerHTML +=
+    `<div class="ll ${type}"><span class="ico">${ico}</span><span>${msg}</span></div>`;
+}
+function clearLog(id) { document.getElementById(id).innerHTML = ''; }
+
+function setProgress(pct) {
+  progress = pct;
+  document.getElementById('progressBar').style.width = pct + '%';
+}
+
+function setBadge(id, type, text) {
+  const el = document.getElementById(id);
+  el.className = 'status ' + type;
+  el.textContent = text;
+}
+
+function setOverall(icon, title, sub, badgeType, badgeText) {
+  document.getElementById('overallBox').querySelector('.overall-icon').textContent = icon;
+  document.getElementById('overallTitle').textContent = title;
+  document.getElementById('overallSub').textContent   = sub;
+  document.getElementById('overallBadge').className   = 'status ' + badgeType;
+  document.getElementById('overallBadge').textContent = badgeText;
+}
+
+// ── STEP 1: Connection ────────────────────────────────
+async function testConnection() {
+  clearLog('connLog');
+  setBadge('s1badge', 'pending', 'Testing…');
+  log('connLog','info','⏳','Connecting to Supabase…');
+
+  try {
+    const { data, error } = await db.from('students').select('count', { count: 'exact', head: true });
+
+    if (error) {
+      if (error.code === '42P01' || error.message.includes('does not exist')) {
+        log('connLog','warn','⚠️',`<strong>Connected!</strong> But tables don't exist yet — do Step 2`);
+        setBadge('s1badge','warn','Connected (no tables)');
+        checks.conn = true;
+        setProgress(25);
+        setOverall('⚠️','Connected but tables missing','Go to Step 2 to create tables','warn','Partial');
+      } else if (error.message.includes('JWT') || error.message.includes('apikey')) {
+        log('connLog','err','❌',`API Key error: ${error.message}`);
+        setBadge('s1badge','err','Auth Error');
+        setOverall('❌','API Key Error','Check Supabase credentials in .env','err','Failed');
+      } else if (error.code === '42501' || error.message.includes('permission')) {
+        log('connLog','warn','⚠️',`Connected but RLS is blocking — do Step 3`);
+        setBadge('s1badge','warn','RLS Issue');
+        checks.conn = true;
+        setProgress(25);
+        setOverall('⚠️','Connected but RLS blocking','Go to Step 3 to disable RLS','warn','Partial');
+      } else {
+        log('connLog','err','❌',`Error: ${error.message}`);
+        setBadge('s1badge','err','Error');
+      }
+    } else {
+      log('connLog','ok','✅','<strong>Supabase CONNECTED!</strong> students table found ✓');
+      setBadge('s1badge','ok','Connected ✓');
+      checks.conn = true;
+      setProgress(25);
+      log('connLog','ok','✅','API key is valid ✓');
+      log('connLog','info','💡','Now check tables in Step 2');
+      setOverall('✅','Supabase Connected!','Connection working — check tables next','ok','Connected');
+    }
+  } catch(e) {
+    log('connLog','err','❌',`Network error: ${e.message}`);
+    log('connLog','warn','⚠️','Make sure you have internet connection');
+    setBadge('s1badge','err','Failed');
+    setOverall('❌','Connection Failed','Check internet connection','err','Failed');
+  }
+}
+
+// ── STEP 2: Tables ────────────────────────────────────
+async function checkTables() {
+  clearLog('tableLog');
+  const tables = ['students','classes','attendance'];
+  let allExist = true;
+
+  log('tableLog','info','⏳','Checking tables…');
+
+  for (const t of tables) {
+    const { data, error } = await db.from(t).select('*').limit(0);
+    if (error && (error.code === '42P01' || error.message.includes('does not exist'))) {
+      log('tableLog','err','❌',`Table <strong>${t}</strong>: ❌ DOES NOT EXIST`);
+      allExist = false;
+    } else if (error) {
+      log('tableLog','warn','⚠️',`Table <strong>${t}</strong>: exists but error — ${error.message}`);
+    } else {
+      log('tableLog','ok','✅',`Table <strong>${t}</strong>: ✓ Exists`);
+    }
+  }
+
+  if (!allExist) {
+    log('tableLog','err','🛑',`<strong>Tables missing!</strong> Copy the SQL above and run it in Supabase SQL Editor`);
+    setBadge('s2badge','err','Tables Missing');
+    setOverall('❌','Tables not created','Copy SQL → Open Supabase → SQL Editor → Paste → Run','err','Action Needed');
+  } else {
+    log('tableLog','ok','🎉','All 3 tables exist! Now do Step 3');
+    setBadge('s2badge','ok','Tables OK ✓');
+    checks.tables = true;
+    setProgress(50);
+    setOverall('⚠️','Tables exist — check RLS','Go to Step 3 to disable RLS','warn','Almost');
+  }
+}
+
+// ── STEP 3: RLS ───────────────────────────────────────
+async function checkRLS() {
+  clearLog('rlsLog');
+  log('rlsLog','info','⏳','Testing if inserts work (RLS check)…');
+
+  // Try a simple insert to test
+  const testRoll = '__rls_test_' + Date.now();
+  const { data, error } = await db.from('students').insert({
+    name: '__rls_test__',
+    roll_number: testRoll
+  }).select();
+
+  if (error) {
+    if (error.code === '42501' || error.message.includes('permission') || error.message.includes('policy') || error.message.includes('RLS')) {
+      log('rlsLog','err','🛑',`<strong>RLS is BLOCKING inserts!</strong>`);
+      log('rlsLog','err','❌',`Error: ${error.message}`);
+      log('rlsLog','warn','⚠️','Fix: Copy RLS SQL above → Supabase SQL Editor → Run');
+      setBadge('s3badge','err','RLS Blocking');
+      setOverall('🛑','RLS is blocking data!','Copy RLS SQL and run it in Supabase SQL Editor','err','Action Needed');
+    } else if (error.code === '42P01') {
+      log('rlsLog','err','❌','Tables missing — do Step 2 first!');
+    } else {
+      log('rlsLog','err','❌',`Error: ${error.message} (code: ${error.code})`);
+    }
+  } else {
+    log('rlsLog','ok','✅','<strong>Insert works! RLS is NOT blocking</strong> ✓');
+    setBadge('s3badge','ok','RLS OK ✓');
+    checks.rls = true;
+    setProgress(75);
+    // Cleanup
+    if (data?.[0]?.id) {
+      await db.from('students').delete().eq('id', data[0].id);
+      log('rlsLog','info','🧹','Test row deleted');
+    }
+    log('rlsLog','ok','✅','Database is accepting data correctly!');
+    log('rlsLog','info','💡','Go to Step 4 to run full test');
+    setOverall('✅','RLS OK — inserts working','Database is ready!','ok','Ready');
+  }
+}
+
+// ── STEP 4: Full Insert Test ──────────────────────────
+async function testInsert() {
+  clearLog('insertLog');
+  log('insertLog','info','⏳','Running full insert test…');
+  const roll = '__fulltest_' + Date.now();
+
+  const { data, error } = await db.from('students').insert({
+    name: 'Test Student (Full)',
+    roll_number: roll,
+    class: 'Test Class',
+    email: 'test@test.com',
+    face_encoding: null,
+    is_active: true
+  }).select();
+
+  if (error) {
+    log('insertLog','err','❌',`INSERT FAILED: <strong>${error.message}</strong>`);
+    log('insertLog','warn','⚠️',`Code: ${error.code}`);
+    if (error.code === '42501') log('insertLog','warn','🛑','RLS blocking — do Step 3 first!');
+    if (error.code === '42P01') log('insertLog','warn','🛑','Tables missing — do Step 2 first!');
+    setBadge('s4badge','err','Failed');
+  } else {
+    log('insertLog','ok','✅',`<strong>INSERT SUCCESS!</strong> Row saved to Supabase ✓`);
+    log('insertLog','ok','✅',`ID: ${data[0].id}`);
+    log('insertLog','ok','✅',`Name: ${data[0].name}`);
+    log('insertLog','ok','✅',`Roll: ${data[0].roll_number}`);
+    setBadge('s4badge','ok','Working ✓');
+    checks.insert = true;
+    setProgress(100);
+    setOverall('🎉','Database fully working!','Students will now save correctly','ok','All Good!');
+
+    // Cleanup
+    await db.from('students').delete().eq('id', data[0].id);
+    log('insertLog','info','🧹','Test row cleaned up');
+
+    // Show final card
+    showFinal();
+  }
+}
+
+// ── STEP 5: View Table ────────────────────────────────
+async function viewTable(tableName) {
+  clearLog('viewLog');
+  document.getElementById('viewTable').style.display = 'none';
+
+  log('viewLog','info','⏳',`Loading ${tableName}…`);
+  const { data, error } = await db.from(tableName).select('*').order('created_at', { ascending: false }).limit(50);
+
+  if (error) {
+    log('viewLog','err','❌',`Error: ${error.message}`);
+    if (error.code === '42P01') log('viewLog','warn','⚠️','Table missing — run Step 2 SQL first!');
+    return;
+  }
+
+  log('viewLog','ok','✅',`${data.length} row(s) in ${tableName}`);
+
+  if (!data.length) {
+    log('viewLog','info','📭','Table is empty — no data yet');
+    return;
+  }
+
+  // Build table
+  const keys   = Object.keys(data[0]).filter(k => k !== 'face_encoding');
+  const tbl    = document.getElementById('viewTable');
+  tbl.style.display = 'block';
+  tbl.innerHTML = `
+    <table class="data-table">
+      <thead><tr>${keys.map(k => `<th>${k}</th>`).join('')}</tr></thead>
+      <tbody>
+        ${data.map(row => `<tr>${keys.map(k => `<td>${row[k] ?? '—'}</td>`).join('')}</tr>`).join('')}
+      </tbody>
+    </table>`;
+}
+
+function showFinal() {
+  document.getElementById('finalCard').style.display = 'block';
+  document.getElementById('finalBody').innerHTML = `
+    <div style="font-size:48px;margin-bottom:14px;">🎉</div>
+    <div style="font-size:20px;font-weight:800;margin-bottom:8px;color:#34d399;">Database Setup Complete!</div>
+    <div style="font-size:13px;color:#64748b;margin-bottom:24px;">Supabase connected • Tables created • RLS disabled • Insert working</div>
+    <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+      <a href="index.html" class="btn btn-primary">🚀 Go to App</a>
+      <button class="btn btn-ghost" onclick="viewTable('students')">👥 View Students</button>
+    </div>`;
+}
+
+// Copy helpers
+function copySQL() {
+  navigator.clipboard.writeText(MAIN_SQL)
+    .then(() => alert('✅ SQL copied!\n\nNow:\n1. Open supabase.com/dashboard\n2. Click SQL Editor\n3. Paste and click Run'))
+    .catch(() => { prompt('Copy this SQL:', MAIN_SQL); });
+}
+function copyRLS() {
+  navigator.clipboard.writeText(RLS_SQL)
+    .then(() => alert('✅ RLS SQL copied!\n\nPaste in Supabase SQL Editor and Run'))
+    .catch(() => { prompt('Copy this:', RLS_SQL); });
+}
+
+function scrollTo(id) { document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+
+// Init
+renderSQL('sqlDisplay', MAIN_SQL);
+renderSQL('rlsSql', RLS_SQL);
+
+// Auto-run connection test
+window.onload = () => setTimeout(testConnection, 500);
+</script>
+</body>
+</html>

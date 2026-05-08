@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Classes – AI Face Attendance</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"><i class="fas fa-brain"></i></div>
+      <span>AI Face<br>Attendance</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">Main</div>
+      <div class="nav-item" onclick="navigateTo('dashboard.html')"><i class="fas fa-th-large"></i> Dashboard</div>
+      <div class="nav-item" onclick="navigateTo('attendance.html')"><i class="fas fa-camera"></i> Mark Attendance</div>
+      <div class="nav-label">Management</div>
+      <div class="nav-item" onclick="navigateTo('students.html')"><i class="fas fa-user-graduate"></i> Students</div>
+      <div class="nav-item active" onclick="navigateTo('classes.html')"><i class="fas fa-chalkboard-teacher"></i> Classes</div>
+      <div class="nav-item" onclick="navigateTo('history.html')"><i class="fas fa-history"></i> Attendance History</div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="admin-badge">
+        <div class="admin-avatar" id="adminAvatar">A</div>
+        <div class="admin-info"><div class="admin-name" id="adminName">Admin</div><div class="admin-role">Administrator</div></div>
+      </div>
+      <button class="btn btn-secondary btn-full btn-sm" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</button>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-title"><i class="fas fa-chalkboard-teacher" style="color:var(--primary)"></i> &nbsp;Classes</div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary btn-sm" onclick="openAddModal()">
+          <i class="fas fa-plus"></i> Add Class
+        </button>
+      </div>
+    </header>
+
+    <div class="content-area">
+      <!-- Stats -->
+      <div class="stats-grid" style="margin-bottom:24px;" id="classStats"></div>
+
+      <!-- Classes Grid -->
+      <div id="classesGrid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:20px;">
+        <div style="color:var(--text-muted);text-align:center;padding:40px;grid-column:1/-1;">
+          <i class="fas fa-spinner fa-spin"></i> Loading classes...
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Add / Edit Modal -->
+<div class="modal-backdrop hidden" id="classModal">
+  <div class="modal" style="max-width:420px;">
+    <div class="modal-header">
+      <div class="modal-title" id="classModalTitle"><i class="fas fa-plus"></i> Add Class</div>
+      <button class="modal-close" onclick="closeModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="classAlert" class="alert hidden"></div>
+      <div class="form-group">
+        <label><i class="fas fa-chalkboard"></i> Class Name</label>
+        <input type="text" id="inputClassName" placeholder="e.g. Class 10-A" />
+      </div>
+      <div class="form-group">
+        <label><i class="fas fa-book"></i> Subject</label>
+        <input type="text" id="inputSubject" placeholder="e.g. Mathematics" />
+      </div>
+      <input type="hidden" id="editClassId" />
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="classSubmitBtn" onclick="submitClass()">
+        <i class="fas fa-save"></i> Save
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- Students in Class Modal -->
+<div class="modal-backdrop hidden" id="studentsModal">
+  <div class="modal" style="max-width:600px;">
+    <div class="modal-header">
+      <div class="modal-title" id="studentsModalTitle">Students</div>
+      <button class="modal-close" onclick="closeStudentsModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body" style="padding:0;">
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Name</th><th>Roll No.</th><th>Email</th><th>Face</th></tr></thead>
+          <tbody id="classStudentsBody">
+            <tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted);">Loading...</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeStudentsModal()">Close</button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/camera.js"></script>
+<script>
+  requireAuth();
+  let allClasses = [];
+
+  async function loadClasses() {
+    try {
+      allClasses = await API.getClasses();
+      renderStats(allClasses);
+      renderClasses(allClasses);
+    } catch (err) {
+      showToast('Failed to load classes: ' + err.message, 'error');
+    }
+  }
+
+  function renderStats(classes) {
+    const subjects = [...new Set(classes.map(c => c.subject))];
+    document.getElementById('classStats').innerHTML = `
+      <div class="stat-card">
+        <div class="stat-icon blue"><i class="fas fa-chalkboard-teacher"></i></div>
+        <div><div class="stat-value">${classes.length}</div><div class="stat-label">Total Classes</div></div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon cyan"><i class="fas fa-book-open"></i></div>
+        <div><div class="stat-value">${subjects.length}</div><div class="stat-label">Subjects</div></div>
+      </div>
+    `;
+  }
+
+  const subjectColors = {
+    'Mathematics': '#4f46e5', 'Science': '#06b6d4', 'Computer Science': '#10b981',
+    'Physics': '#f59e0b', 'Chemistry': '#ef4444', 'Biology': '#8b5cf6',
+  };
+
+  function renderClasses(classes) {
+    if (!classes.length) {
+      document.getElementById('classesGrid').innerHTML = `
+        <div style="color:var(--text-muted);text-align:center;padding:60px;grid-column:1/-1;">
+          <i class="fas fa-chalkboard-teacher" style="font-size:48px;display:block;margin-bottom:16px;"></i>
+          No classes yet. Add your first class!
+        </div>`;
+      return;
+    }
+    document.getElementById('classesGrid').innerHTML = classes.map(cls => {
+      const color = subjectColors[cls.subject] || '#4f46e5';
+      return `
+        <div class="card" style="border-top:3px solid ${color};">
+          <div class="card-body" style="padding:20px;">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:12px;">
+              <div>
+                <div style="font-size:16px;font-weight:700;">${cls.class_name}</div>
+                <div style="font-size:13px;color:var(--text-muted);margin-top:2px;">${cls.subject}</div>
+              </div>
+              <div style="width:40px;height:40px;border-radius:10px;background:${color}22;
+                          display:flex;align-items:center;justify-content:center;color:${color};font-size:18px;">
+                <i class="fas fa-chalkboard"></i>
+              </div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:16px;flex-wrap:wrap;">
+              <button class="btn btn-sm btn-secondary" onclick="viewStudents('${cls.class_name}')">
+                <i class="fas fa-users"></i> Students
+              </button>
+              <button class="btn btn-sm btn-secondary" onclick="openEditModal('${cls.id}','${cls.class_name.replace(/'/g,"\\'")}','${cls.subject.replace(/'/g,"\\'")}')">
+                <i class="fas fa-edit"></i>
+              </button>
+              <button class="btn btn-sm btn-danger" onclick="deleteClass('${cls.id}','${cls.class_name.replace(/'/g,"\\'")}')">
+                <i class="fas fa-trash"></i>
+              </button>
+            </div>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  function openAddModal() {
+    document.getElementById('classModalTitle').innerHTML = '<i class="fas fa-plus"></i> Add Class';
+    document.getElementById('inputClassName').value = '';
+    document.getElementById('inputSubject').value = '';
+    document.getElementById('editClassId').value = '';
+    document.getElementById('classAlert').className = 'alert hidden';
+    document.getElementById('classModal').classList.remove('hidden');
+  }
+
+  function openEditModal(id, name, subject) {
+    document.getElementById('classModalTitle').innerHTML = '<i class="fas fa-edit"></i> Edit Class';
+    document.getElementById('inputClassName').value = name;
+    document.getElementById('inputSubject').value = subject;
+    document.getElementById('editClassId').value = id;
+    document.getElementById('classAlert').className = 'alert hidden';
+    document.getElementById('classModal').classList.remove('hidden');
+  }
+
+  function closeModal() { document.getElementById('classModal').classList.add('hidden'); }
+
+  async function submitClass() {
+    const btn = document.getElementById('classSubmitBtn');
+    const alert = document.getElementById('classAlert');
+    const className = document.getElementById('inputClassName').value.trim();
+    const subject   = document.getElementById('inputSubject').value.trim();
+    const editId    = document.getElementById('editClassId').value;
+
+    if (!className || !subject) {
+      alert.textContent = 'Both fields are required'; alert.className = 'alert alert-error'; return;
+    }
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+    try {
+      if (editId) {
+        await API.updateClass(editId, { class_name: className, subject });
+        showToast('Class updated!', 'success');
+      } else {
+        await API.createClass({ class_name: className, subject });
+        showToast('Class added!', 'success');
+      }
+      closeModal();
+      loadClasses();
+    } catch (err) {
+      alert.textContent = err.message; alert.className = 'alert alert-error';
+    } finally {
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Save';
+    }
+  }
+
+  async function deleteClass(id, name) {
+    if (!confirm(`Delete class "${name}"?`)) return;
+    try {
+      await API.deleteClass(id);
+      showToast(`"${name}" deleted`, 'success');
+      loadClasses();
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  async function viewStudents(className) {
+    document.getElementById('studentsModalTitle').textContent = `${className} – Students`;
+    document.getElementById('classStudentsBody').innerHTML =
+      '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted);"><i class="fas fa-spinner fa-spin"></i></td></tr>';
+    document.getElementById('studentsModal').classList.remove('hidden');
+    try {
+      const students = await API.getStudentsByClass(className);
+      if (!students.length) {
+        document.getElementById('classStudentsBody').innerHTML =
+          '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-muted);">No students in this class</td></tr>';
+        return;
+      }
+      document.getElementById('classStudentsBody').innerHTML = students.map(s => `
+        <tr>
+          <td style="font-weight:500;">${s.name}</td>
+          <td style="color:var(--text-muted);">${s.roll_number}</td>
+          <td style="font-size:13px;color:var(--text-muted);">${s.email || '—'}</td>
+          <td>${s.face_encoding
+            ? '<span class="badge badge-success"><i class="fas fa-check"></i> Set</span>'
+            : '<span class="badge badge-warning">Not Set</span>'}</td>
+        </tr>`).join('');
+    } catch (err) {
+      showToast(err.message, 'error');
+    }
+  }
+
+  function closeStudentsModal() { document.getElementById('studentsModal').classList.add('hidden'); }
+
+  loadClasses();
+</script>
+</body>
+</html>

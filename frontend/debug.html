@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+  <title>🔍 DB Debug</title>
+  <style>
+    * { box-sizing:border-box; margin:0; padding:0; }
+    body { font-family:'Courier New',monospace; background:#0a0e1a; color:#e2e8f0; padding:24px; min-height:100vh; }
+    h1 { color:#38bdf8; margin-bottom:6px; font-size:20px; }
+    .sub { color:#64748b; font-size:13px; margin-bottom:24px; }
+    .section { background:#111827; border:1px solid #1e2d40; border-radius:10px; padding:20px; margin-bottom:16px; }
+    .section h2 { font-size:14px; font-weight:700; margin-bottom:14px; color:#94a3b8; letter-spacing:.06em; text-transform:uppercase; }
+    .log-line { padding:6px 10px; border-radius:6px; font-size:13px; margin-bottom:6px; display:flex; align-items:flex-start; gap:10px; }
+    .log-line.ok   { background:rgba(16,185,129,.1); color:#34d399; border-left:3px solid #10b981; }
+    .log-line.err  { background:rgba(244,63,94,.1);  color:#fb7185; border-left:3px solid #f43f5e; }
+    .log-line.info { background:rgba(14,165,233,.1); color:#38bdf8; border-left:3px solid #0ea5e9; }
+    .log-line.warn { background:rgba(245,158,11,.1); color:#fbbf24; border-left:3px solid #f59e0b; }
+    .log-line .ico { flex-shrink:0; width:16px; }
+    .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 20px; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; border:none; font-family:inherit; margin-right:10px; margin-bottom:10px; transition:all .2s; }
+    .btn-blue  { background:#0ea5e9; color:#fff; }
+    .btn-green { background:#10b981; color:#fff; }
+    .btn-red   { background:#f43f5e; color:#fff; }
+    .btn:hover { filter:brightness(1.1); transform:translateY(-1px); }
+    .btn:disabled { opacity:.4; cursor:not-allowed; transform:none; }
+    .data-box { background:#0a0e1a; border:1px solid #1e2d40; border-radius:6px; padding:12px; font-size:12px; color:#94a3b8; max-height:200px; overflow-y:auto; word-break:break-all; white-space:pre-wrap; margin-top:8px; }
+    .spinner { animation:spin 1s linear infinite; display:inline-block; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+    .badge { display:inline-block; padding:2px 8px; border-radius:99px; font-size:11px; font-weight:700; }
+    .badge-ok  { background:rgba(16,185,129,.2); color:#34d399; }
+    .badge-err { background:rgba(244,63,94,.2);  color:#fb7185; }
+    .fix-box { background:rgba(245,158,11,.08); border:1px solid rgba(245,158,11,.25); border-radius:8px; padding:14px; margin-top:12px; font-size:12px; color:#fbbf24; line-height:1.8; }
+    .fix-box strong { color:#fff; }
+    code { background:rgba(14,165,233,.12); padding:1px 5px; border-radius:3px; color:#38bdf8; font-size:11px; }
+    textarea { width:100%; background:#0a0e1a; border:1px solid #1e2d40; border-radius:8px; color:#e2e8f0; padding:10px; font-family:inherit; font-size:12px; resize:vertical; }
+    hr { border:none; border-top:1px solid #1e2d40; margin:16px 0; }
+  </style>
+</head>
+<body>
+
+<h1>🔍 Database Diagnostic Tool</h1>
+<p class="sub">Supabase + Backend connection tester</p>
+
+<!-- Step 1: Backend -->
+<div class="section">
+  <h2>Step 1 — Backend Server (localhost:8000)</h2>
+  <button class="btn btn-blue" onclick="testBackend()">▶ Test Backend</button>
+  <div id="backendLog"></div>
+</div>
+
+<!-- Step 2: Supabase Direct -->
+<div class="section">
+  <h2>Step 2 — Supabase Direct Test (JS SDK)</h2>
+  <button class="btn btn-blue" onclick="testSupabase()">▶ Test Supabase Connection</button>
+  <div id="supaLog"></div>
+</div>
+
+<!-- Step 3: Create Tables -->
+<div class="section">
+  <h2>Step 3 — Create / Fix Tables in Supabase</h2>
+  <p style="font-size:12px;color:#64748b;margin-bottom:12px;">Agar tables exist nahi karte toh yeh SQL copy karke Supabase SQL Editor mein run karo</p>
+  <button class="btn btn-green" onclick="checkTables()">▶ Check Which Tables Exist</button>
+  <button class="btn btn-red" onclick="showSQL()">📋 Copy SQL to Create Tables</button>
+  <div id="tableLog"></div>
+  <div id="sqlBox" style="display:none;">
+    <p style="font-size:12px;color:#fbbf24;margin:10px 0 6px;">👇 Yeh SQL copy karo aur Supabase → SQL Editor mein paste karke Run karo:</p>
+    <textarea id="sqlText" rows="20" onclick="this.select()"></textarea>
+    <button class="btn btn-green" onclick="copySQL()" style="margin-top:8px;">📋 Copy to Clipboard</button>
+  </div>
+</div>
+
+<!-- Step 4: Test Insert -->
+<div class="section">
+  <h2>Step 4 — Test Direct INSERT to students table</h2>
+  <button class="btn btn-blue" onclick="testInsert()">▶ Test Insert</button>
+  <div id="insertLog"></div>
+</div>
+
+<!-- Step 5: View existing data -->
+<div class="section">
+  <h2>Step 5 — View Existing Data</h2>
+  <button class="btn btn-blue" onclick="viewStudents()">👥 Students</button>
+  <button class="btn btn-blue" onclick="viewClasses()">🏫 Classes</button>
+  <button class="btn btn-blue" onclick="viewAttendance()">📋 Attendance</button>
+  <div id="viewLog"></div>
+  <div class="data-box" id="viewData" style="display:none;"></div>
+</div>
+
+<!-- Summary -->
+<div class="section" id="summarySection" style="display:none;">
+  <h2>📋 Summary & Fix</h2>
+  <div id="summaryContent"></div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script>
+const SUPA_URL = "https://xuduzaibuefetuvbzgpb.supabase.co";
+const SUPA_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1ZHV6YWlidWVmZXR1dmJ6Z3BiIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM4MTM5NTUsImV4cCI6MjA4OTM4OTk1NX0.t_vKegFQy60r6_K2H4z_cDDc3L7Zk68ktJFRActPj_Y";
+
+const { createClient } = supabase;
+const db = createClient(SUPA_URL, SUPA_KEY);
+
+const issues = [];
+const fixes  = [];
+
+function log(containerId, type, icon, msg) {
+  const el = document.getElementById(containerId);
+  el.innerHTML += `<div class="log-line ${type}"><span class="ico">${icon}</span><span>${msg}</span></div>`;
+}
+
+function clear(id) { document.getElementById(id).innerHTML = ''; }
+
+// ── Step 1: Backend ────────────────────────────────────
+async function testBackend() {
+  clear('backendLog');
+  log('backendLog','info','⏳','Testing http://localhost:8000 …');
+  try {
+    const r = await fetch('http://localhost:8000/', { signal: AbortSignal.timeout(4000) });
+    const d = await r.json();
+    log('backendLog','ok','✅',`Backend ONLINE — ${JSON.stringify(d)}`);
+
+    // Test login
+    log('backendLog','info','⏳','Testing login with admin/admin123 …');
+    const lr = await fetch('http://localhost:8000/api/auth/login', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({username:'admin', password:'admin123'})
+    });
+    const ld = await lr.json();
+    if (lr.ok) {
+      log('backendLog','ok','✅',`Login SUCCESS — token received ✓`);
+      sessionStorage.setItem('debug_token', ld.access_token);
+    } else {
+      log('backendLog','err','❌',`Login FAILED: ${JSON.stringify(ld)}`);
+      issues.push('Backend login failed');
+    }
+
+  } catch(e) {
+    log('backendLog','err','❌',`Backend OFFLINE: ${e.message}`);
+    log('backendLog','warn','⚠️','Fix: Open terminal → cd backend → python main.py');
+    issues.push('Backend not running');
+  }
+}
+
+// ── Step 2: Supabase Direct ────────────────────────────
+async function testSupabase() {
+  clear('supaLog');
+  log('supaLog','info','⏳','Connecting to Supabase …');
+  try {
+    const { data, error } = await db.from('students').select('count', { count: 'exact', head: true });
+    if (error) {
+      if (error.message.includes('does not exist') || error.code === '42P01') {
+        log('supaLog','err','❌',`students table does NOT EXIST — tables not created yet!`);
+        log('supaLog','warn','⚠️','Fix: Run Step 3 SQL in Supabase SQL Editor');
+        issues.push('Tables not created');
+        fixes.push('Run the SQL from Step 3 in Supabase → SQL Editor');
+      } else if (error.message.includes('JWTExpired') || error.message.includes('JWT')) {
+        log('supaLog','err','❌',`Auth error — API key might be wrong: ${error.message}`);
+        issues.push('Wrong Supabase API key');
+      } else if (error.message.includes('permission') || error.code === '42501') {
+        log('supaLog','err','❌',`RLS blocking access — Row Level Security issue`);
+        log('supaLog','warn','⚠️','Fix: In Supabase → Table Editor → students → RLS → disable or add policy');
+        issues.push('RLS blocking inserts');
+        fixes.push('Disable RLS or add permissive policy in Supabase dashboard');
+      } else {
+        log('supaLog','err','❌',`Supabase error: ${error.message} (code: ${error.code})`);
+        issues.push(`Supabase: ${error.message}`);
+      }
+    } else {
+      log('supaLog','ok','✅',`Supabase CONNECTED — students table exists!`);
+      updateSummary();
+    }
+  } catch(e) {
+    log('supaLog','err','❌',`Connection error: ${e.message}`);
+    issues.push('Supabase unreachable');
+  }
+}
+
+// ── Step 3: Check Tables ───────────────────────────────
+async function checkTables() {
+  clear('tableLog');
+  const tables = ['students','classes','attendance'];
+  for (const t of tables) {
+    try {
+      const { data, error } = await db.from(t).select('*').limit(0);
+      if (error) {
+        log('tableLog','err','❌',`Table <strong>${t}</strong>: ${error.code === '42P01' ? 'DOES NOT EXIST' : error.message}`);
+      } else {
+        log('tableLog','ok','✅',`Table <strong>${t}</strong>: EXISTS ✓`);
+      }
+    } catch(e) {
+      log('tableLog','err','❌',`Table ${t}: Error — ${e.message}`);
+    }
+  }
+  updateSummary();
+}
+
+const SQL = `-- ═══════════════════════════════════════════════════
+-- AI Face Attendance — Run this in Supabase SQL Editor
+-- ═══════════════════════════════════════════════════
+
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+-- CLASSES table
+CREATE TABLE IF NOT EXISTS classes (
+    id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    class_name  VARCHAR(100) NOT NULL,
+    subject     VARCHAR(100) NOT NULL,
+    created_at  TIMESTAMPTZ  DEFAULT NOW()
+);
+
+-- STUDENTS table
+CREATE TABLE IF NOT EXISTS students (
+    id            UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name          VARCHAR(100) NOT NULL,
+    roll_number   VARCHAR(30)  UNIQUE NOT NULL,
+    class         VARCHAR(100),
+    face_encoding TEXT,
+    email         VARCHAR(100),
+    is_active     BOOLEAN DEFAULT TRUE,
+    created_at    TIMESTAMPTZ  DEFAULT NOW()
+);
+
+-- ATTENDANCE table
+CREATE TABLE IF NOT EXISTS attendance (
+    id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    student_id  UUID NOT NULL REFERENCES students(id) ON DELETE CASCADE,
+    date        DATE    NOT NULL DEFAULT CURRENT_DATE,
+    time        TIME    NOT NULL DEFAULT CURRENT_TIME,
+    status      VARCHAR(10) NOT NULL DEFAULT 'present'
+                CHECK (status IN ('present','absent','late')),
+    confidence  FLOAT,
+    created_at  TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (student_id, date)
+);
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_students_roll   ON students(roll_number);
+CREATE INDEX IF NOT EXISTS idx_attendance_date ON attendance(date);
+CREATE INDEX IF NOT EXISTS idx_attendance_stu  ON attendance(student_id);
+
+-- DISABLE RLS (allow all access with anon key)
+ALTER TABLE classes    DISABLE ROW LEVEL SECURITY;
+ALTER TABLE students   DISABLE ROW LEVEL SECURITY;
+ALTER TABLE attendance DISABLE ROW LEVEL SECURITY;
+
+-- Seed sample classes
+INSERT INTO classes (class_name, subject) VALUES
+  ('Class 10-A', 'Mathematics'),
+  ('Class 10-B', 'Science'),
+  ('Class 11-A', 'Computer Science'),
+  ('Class 11-B', 'Physics'),
+  ('Class 12-A', 'Chemistry')
+ON CONFLICT DO NOTHING;
+
+SELECT 'Done! Tables created successfully.' AS result;`;
+
+function showSQL() {
+  document.getElementById('sqlBox').style.display = 'block';
+  document.getElementById('sqlText').value = SQL;
+  document.getElementById('sqlText').select();
+}
+
+function copySQL() {
+  navigator.clipboard.writeText(SQL)
+    .then(() => alert('✅ SQL copied! Now paste it in Supabase → SQL Editor → Run'))
+    .catch(() => { document.getElementById('sqlText').select(); document.execCommand('copy'); alert('✅ SQL copied!'); });
+}
+
+// ── Step 4: Test Insert ───────────────────────────────
+async function testInsert() {
+  clear('insertLog');
+  log('insertLog','info','⏳','Testing INSERT into students …');
+  try {
+    const { data, error } = await db.from('students').insert({
+      name: '_debug_test_',
+      roll_number: '_DBG_' + Date.now(),
+      class: null,
+      email: null,
+      face_encoding: null
+    }).select();
+
+    if (error) {
+      log('insertLog','err','❌',`INSERT failed: <strong>${error.message}</strong>`);
+      log('insertLog','info','💡',`Error code: ${error.code}`);
+
+      if (error.code === '42P01') {
+        log('insertLog','warn','⚠️','Tables not created yet — run Step 3 SQL first!');
+        fixes.push('Create tables using Step 3 SQL');
+      } else if (error.code === '42501' || error.message.includes('RLS') || error.message.includes('policy')) {
+        log('insertLog','warn','⚠️','RLS is blocking insert. Fix in Supabase → Authentication → Policies');
+        log('insertLog','info','💡','Quickfix: Run this in SQL Editor: ALTER TABLE students DISABLE ROW LEVEL SECURITY;');
+        fixes.push('Disable RLS: ALTER TABLE students DISABLE ROW LEVEL SECURITY;');
+      } else if (error.message.includes('JWT') || error.message.includes('token')) {
+        log('insertLog','warn','⚠️','API key issue — check SUPABASE_KEY in .env');
+        fixes.push('Check SUPABASE_KEY in backend/.env');
+      } else {
+        fixes.push(`Fix: ${error.message}`);
+      }
+      issues.push('INSERT blocked');
+    } else {
+      log('insertLog','ok','✅','INSERT SUCCESS! Data reached Supabase ✓');
+      log('insertLog','ok','✅',`Inserted row: ${JSON.stringify(data[0])}`);
+      // Delete test row
+      if (data[0]?.id) {
+        await db.from('students').delete().eq('id', data[0].id);
+        log('insertLog','info','🧹','Test row deleted (cleanup done)');
+      }
+      log('insertLog','ok','🎉','<strong>Database is working correctly!</strong> Problem is in backend code or face encoding.');
+    }
+  } catch(e) {
+    log('insertLog','err','❌',`Exception: ${e.message}`);
+  }
+  updateSummary();
+}
+
+// ── Step 5: View data ─────────────────────────────────
+async function viewStudents() {
+  clear('viewLog');
+  document.getElementById('viewData').style.display = 'none';
+  log('viewLog','info','⏳','Loading students …');
+  try {
+    const { data, error } = await db.from('students').select('id,name,roll_number,class,email,is_active,created_at').order('created_at', { ascending: false });
+    if (error) { log('viewLog','err','❌',`Error: ${error.message}`); return; }
+    log('viewLog','ok','✅',`${data.length} student(s) found`);
+    const box = document.getElementById('viewData');
+    box.style.display = 'block';
+    box.textContent = data.length === 0
+      ? 'No students in database yet.'
+      : data.map((s,i) => `${i+1}. ${s.name} | Roll: ${s.roll_number} | Class: ${s.class||'—'} | Active: ${s.is_active}`).join('\n');
+  } catch(e) { log('viewLog','err','❌',e.message); }
+}
+
+async function viewClasses() {
+  clear('viewLog');
+  document.getElementById('viewData').style.display = 'none';
+  try {
+    const { data, error } = await db.from('classes').select('*').order('class_name');
+    if (error) { log('viewLog','err','❌',`Error: ${error.message}`); return; }
+    log('viewLog','ok','✅',`${data.length} class(es) found`);
+    const box = document.getElementById('viewData');
+    box.style.display = 'block';
+    box.textContent = data.length === 0
+      ? 'No classes yet.'
+      : data.map((c,i) => `${i+1}. ${c.class_name} | Subject: ${c.subject}`).join('\n');
+  } catch(e) { log('viewLog','err','❌',e.message); }
+}
+
+async function viewAttendance() {
+  clear('viewLog');
+  document.getElementById('viewData').style.display = 'none';
+  try {
+    const { data, error } = await db.from('attendance').select('*').order('created_at', { ascending: false }).limit(20);
+    if (error) { log('viewLog','err','❌',`Error: ${error.message}`); return; }
+    log('viewLog','ok','✅',`${data.length} attendance record(s) (last 20)`);
+    const box = document.getElementById('viewData');
+    box.style.display = 'block';
+    box.textContent = data.length === 0
+      ? 'No attendance records yet.'
+      : data.map((r,i) => `${i+1}. Date: ${r.date} | Time: ${r.time} | Status: ${r.status} | Conf: ${r.confidence||'—'}`).join('\n');
+  } catch(e) { log('viewLog','err','❌',e.message); }
+}
+
+// ── Summary ────────────────────────────────────────────
+function updateSummary() {
+  const sec = document.getElementById('summarySection');
+  const con = document.getElementById('summaryContent');
+  sec.style.display = 'block';
+
+  if (issues.length === 0) {
+    con.innerHTML = `<div class="log-line ok"><span class="ico">🎉</span><span><strong>Everything looks good!</strong> Database is connected and working.</span></div>`;
+  } else {
+    con.innerHTML = `
+      <div style="margin-bottom:12px;font-size:13px;color:#fb7185;font-weight:700;">Found ${issues.length} issue(s):</div>
+      ${issues.map(i => `<div class="log-line err"><span class="ico">❌</span><span>${i}</span></div>`).join('')}
+      ${fixes.length ? `
+        <hr/>
+        <div style="margin-bottom:8px;font-size:13px;color:#fbbf24;font-weight:700;">How to fix:</div>
+        ${fixes.map((f,i) => `<div class="log-line warn"><span class="ico">${i+1}.</span><span>${f}</span></div>`).join('')}
+      ` : ''}
+    `;
+  }
+}
+
+// Auto-run on load
+window.onload = () => {
+  testBackend();
+  setTimeout(testSupabase, 500);
+};
+</script>
+</body>
+</html>

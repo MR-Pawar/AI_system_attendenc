@@ -1,0 +1,697 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
+  <title>Register Student — AI Face Attendance</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    /* Wizard progress */
+    .wiz { display:flex; align-items:center; gap:0; margin-bottom:32px; }
+    .wiz-step { display:flex; align-items:center; gap:8px; }
+    .wiz-circle {
+      width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center;
+      font-size:13px; font-weight:700; border:2px solid var(--border); color:var(--text-2);
+      background:var(--bg-2); font-family:var(--mono); transition:all .3s; flex-shrink:0;
+    }
+    .wiz-circle.active { border-color:var(--primary); color:var(--primary); background:var(--primary-dim); }
+    .wiz-circle.done   { border-color:var(--success); background:var(--success); color:#fff; }
+    .wiz-lbl { font-size:12px; font-weight:600; color:var(--text-2); transition:color .3s; }
+    .wiz-lbl.active { color:var(--text); }
+    .wiz-line { height:2px; flex:1; background:var(--border); margin:0 10px; min-width:24px; transition:background .3s; }
+    .wiz-line.done { background:var(--success); }
+
+    .reg-panel { display:none; animation:fadeUp .3s ease both; }
+    .reg-panel.active { display:block; }
+    @keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+
+    /* Camera */
+    .cam-wrap { position:relative; border-radius:var(--radius-lg); overflow:hidden; background:#000; aspect-ratio:4/3; border:1px solid var(--border); }
+    .cam-wrap video,.cam-wrap canvas { width:100%;height:100%;object-fit:cover;display:block; }
+    .cam-idle-box { position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;background:var(--bg-2);z-index:5; }
+    .cam-oval { position:absolute;top:50%;left:50%;transform:translate(-50%,-55%);width:160px;height:200px;border-radius:50%;border:2px dashed rgba(14,165,233,.5);z-index:4;pointer-events:none;transition:all .3s; }
+    .cam-oval.ok   { border-color:var(--success);border-style:solid;box-shadow:0 0 20px rgba(16,185,129,.25); }
+    .cam-oval.warn { border-color:var(--warning);border-style:solid; }
+    .cam-bar { position:absolute;bottom:0;left:0;right:0;background:linear-gradient(transparent,rgba(0,0,0,.8));padding:24px 14px 10px;z-index:6;display:flex;justify-content:space-between;font-size:11px; }
+
+    .capture-btn { width:56px;height:56px;border-radius:50%;background:var(--primary);color:#fff;font-size:20px;display:flex;align-items:center;justify-content:center;border:3px solid rgba(255,255,255,.15);box-shadow:0 4px 16px rgba(14,165,233,.4);transition:all .2s; }
+    .capture-btn:hover:not(:disabled) { transform:scale(1.08); }
+    .capture-btn:disabled { opacity:.35;cursor:not-allowed; }
+
+    /* Quality pills */
+    .qpills { display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;justify-content:center; }
+    .qpill { padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600;display:inline-flex;align-items:center;gap:4px;font-family:var(--mono); }
+    .qpill.ok   { background:rgba(16,185,129,.12);color:#34d399;border:1px solid rgba(16,185,129,.2); }
+    .qpill.fail { background:rgba(244,63,94,.12); color:#fb7185;border:1px solid rgba(244,63,94,.2); }
+
+    /* Success */
+    .success-panel { text-align:center;padding:40px 20px; }
+    .success-ring  { width:96px;height:96px;border-radius:50%;margin:0 auto 20px;background:linear-gradient(135deg,var(--primary),var(--cyan));display:flex;align-items:center;justify-content:center;font-size:34px;font-weight:800;color:#fff;border:4px solid rgba(16,185,129,.4);box-shadow:0 0 32px rgba(16,185,129,.25); }
+    .enc-box { background:var(--bg-2);border:1px solid var(--border);border-radius:10px;padding:12px;text-align:left;margin:16px 0;max-height:80px;overflow:hidden;position:relative; }
+    .enc-box::after { content:'';position:absolute;bottom:0;left:0;right:0;height:28px;background:linear-gradient(transparent,var(--bg-2)); }
+    .enc-txt { font-family:var(--mono);font-size:10px;color:var(--primary);word-break:break-all; }
+  
+
+    @keyframes popIn    { from{opacity:0;transform:scale(.5)} to{opacity:1;transform:scale(1)} }
+    @keyframes slideUp  { from{opacity:0;transform:translateY(14px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes successPulse { 0%{opacity:.7;transform:scale(1)} 100%{opacity:0;transform:scale(2)} }
+
+    @media(max-width:640px){
+      /* dept/year/section row → stack on mobile */
+      #s1 .form-row + div[style*="grid-template-columns:1fr 1fr 1fr"] {
+        grid-template-columns: 1fr !important;
+      }
+      .wiz{gap:0;padding:0 4px;}
+      .wiz-line{min-width:14px;max-width:22px;}
+      .wiz-lbl{display:none;}
+      .reg-two-col{flex-direction:column!important;}
+      .cam-wrap{max-width:100%!important;}
+      .capture-btn{width:48px;height:48px;font-size:17px;}
+      .thumb{width:52px;height:52px;}
+      .thumb-strip{justify-content:flex-start;overflow-x:auto;}
+      .success-ring{width:72px;height:72px;font-size:26px;}
+    }
+
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar" id="topbar"></header>
+    <div class="content-area" style="max-width:900px;margin:0 auto;">
+
+      <!-- Wizard -->
+      <div class="wiz" id="wizBar">
+        <div class="wiz-step"><div class="wiz-circle active" id="wc1">1</div><div class="wiz-lbl active" id="wl1">Info</div></div>
+        <div class="wiz-line" id="wln1"></div>
+        <div class="wiz-step"><div class="wiz-circle" id="wc2">2</div><div class="wiz-lbl" id="wl2">Face</div></div>
+        <div class="wiz-line" id="wln2"></div>
+        <div class="wiz-step"><div class="wiz-circle" id="wc3">3</div><div class="wiz-lbl" id="wl3">Confirm</div></div>
+        <div class="wiz-line" id="wln3"></div>
+        <div class="wiz-step"><div class="wiz-circle" id="wc4">4</div><div class="wiz-lbl" id="wl4">Done</div></div>
+      </div>
+
+      <!-- STEP 1 -->
+      <div class="reg-panel active" id="rp1">
+        <div class="card card-glow">
+          <div class="card-header"><div class="card-title"><i class="fas fa-id-card"></i> Student Information</div></div>
+          <div class="card-body">
+            <div id="a1" class="alert alert-error hidden"></div>
+
+            <!-- Row 1: Name + Roll -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>Full Name <span class="req">*</span></label>
+                <div class="input-icon">
+                  <i class="fas fa-user"></i>
+                  <input class="form-control" id="s_name" placeholder="e.g. Rahul Sharma" oninput="livePreview()"/>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Roll Number <span class="req">*</span></label>
+                <div class="input-icon">
+                  <i class="fas fa-hashtag"></i>
+                  <input class="form-control" id="s_roll" placeholder="e.g. 2024001" oninput="livePreview()"/>
+                </div>
+              </div>
+            </div>
+
+            <!-- Row 2: Department + Year + Section -->
+            <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;">
+              <div class="form-group">
+                <label><i class="fas fa-building-columns" style="color:var(--primary);margin-right:4px;"></i>Department <span class="req">*</span></label>
+                <select class="form-control" id="s_dept" onchange="livePreview()">
+                  <option value="">Select Dept</option>
+                  <option value="BCA">BCA</option>
+                  <option value="B.com">B.com</option>
+                  <option value="BSc">BSc</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label><i class="fas fa-layer-group" style="color:var(--primary);margin-right:4px;"></i>Year <span class="req">*</span></label>
+                <select class="form-control" id="s_year" onchange="livePreview()">
+                  <option value="">Select Year</option>
+                  <option value="1st">1st Year</option>
+                  <option value="2nd">2nd Year</option>
+                  <option value="3rd">3rd Year</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label><i class="fas fa-users-rectangle" style="color:var(--primary);margin-right:4px;"></i>Section <span class="req">*</span></label>
+                <select class="form-control" id="s_section" onchange="livePreview()">
+                  <option value="">Section</option>
+                  <option value="A">Section A</option>
+                  <option value="B">Section B</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Row 3: Email -->
+            <div class="form-row">
+              <div class="form-group">
+                <label>Email <span style="color:var(--text-2);font-weight:400;">(optional)</span></label>
+                <div class="input-icon">
+                  <i class="fas fa-envelope"></i>
+                  <input class="form-control" id="s_email" type="email" placeholder="student@college.com"/>
+                </div>
+              </div>
+              <div class="form-group">
+                <label>Class (Auto-generated)</label>
+                <input class="form-control" id="s_class_display" readonly placeholder="Will auto-fill from above"
+                  style="cursor:not-allowed;opacity:.7;"/>
+                <input type="hidden" id="s_class"/>
+              </div>
+            </div>
+            <!-- Preview -->
+            <div id="preview" style="display:none;margin-top:4px;padding:14px;background:var(--bg-2);border-radius:10px;border:1px solid var(--border);">
+              <div style="font-size:11px;color:var(--text-2);margin-bottom:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;">Preview</div>
+              <div style="display:flex;gap:12px;flex-wrap:wrap;font-size:13px;">
+                <div><div style="font-size:10px;color:var(--text-2);">Name</div><div style="font-weight:700;" id="pv_name">—</div></div>
+                <div><div style="font-size:10px;color:var(--text-2);">Roll</div><div class="mono" style="font-weight:700;" id="pv_roll">—</div></div>
+                <div><div style="font-size:10px;color:var(--text-2);">Dept</div><div style="font-weight:700;" id="pv_dept">—</div></div>
+                <div><div style="font-size:10px;color:var(--text-2);">Year</div><div style="font-weight:700;" id="pv_year">—</div></div>
+                <div><div style="font-size:10px;color:var(--text-2);">Section</div><div style="font-weight:700;" id="pv_section">—</div></div>
+                <div><div style="font-size:10px;color:var(--text-2);">Class</div><div style="font-weight:700;color:var(--primary);" id="pv_class">—</div></div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:flex-end;margin-top:20px;">
+              <button class="btn btn-primary" onclick="toStep2()">Next — Capture Face &nbsp;<i class="fas fa-arrow-right"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 2 -->
+      <div class="reg-panel" id="rp2">
+        <div class="card card-glow">
+          <div class="card-header">
+            <div class="card-title"><i class="fas fa-camera"></i> Face Capture</div>
+            <div style="font-size:12px;color:var(--text-2);">Capture 3–5 photos for accuracy</div>
+          </div>
+          <div class="card-body">
+            <div id="a2" class="alert alert-error hidden"></div>
+            <div class="reg-two-col" style="display:flex;gap:20px;flex-wrap:wrap;">
+              <!-- Camera -->
+              <div style="flex:1.1;min-width:260px;">
+                <div class="cam-wrap" id="camWrap">
+                  <div class="cam-idle-box" id="camIdle">
+                    <div style="width:64px;height:64px;border-radius:50%;background:var(--surface);border:2px dashed var(--border-2);display:flex;align-items:center;justify-content:center;font-size:26px;color:var(--text-2);"><i class="fas fa-camera"></i></div>
+                    <button class="btn btn-primary" onclick="startCam()"><i class="fas fa-video"></i> Start Camera</button>
+                  </div>
+                  <video id="camVid" autoplay muted playsinline style="display:none;"></video>
+                  <canvas id="camCanvas" style="display:none;position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:3;"></canvas>
+                  <div class="cam-oval" id="camOval"></div>
+                  <div class="cam-bar" id="camBar" style="display:none;">
+                    <span id="camStatusTxt" style="color:var(--text-2);">Detecting…</span>
+                    <span id="camQScore" class="mono" style="color:var(--text-2);">—</span>
+                  </div>
+                </div>
+                <div class="qpills" id="qpills"></div>
+                <div style="display:flex;justify-content:center;gap:12px;margin-top:14px;">
+                  <button class="capture-btn" id="capBtn" onclick="captureFrame()" disabled><i class="fas fa-camera"></i></button>
+                  <button class="btn btn-ghost btn-sm" onclick="autoCapture()" id="autoBtn" style="display:none;"><i class="fas fa-magic"></i> Auto</button>
+                  <button class="btn btn-ghost btn-sm" onclick="clearFrames()" id="clearBtn" style="display:none;"><i class="fas fa-trash"></i></button>
+                </div>
+                <div style="text-align:center;font-size:11px;color:var(--text-2);margin-top:8px;">Position face in oval • Good light • Look straight</div>
+              </div>
+              <!-- Thumbs + tips -->
+              <div style="flex:1;min-width:200px;">
+                <div style="font-size:12px;font-weight:700;color:var(--text-2);margin-bottom:10px;letter-spacing:.04em;">CAPTURED (<span id="capCount">0</span>/5)</div>
+                <div class="thumb-strip" id="thumbStrip"></div>
+                <div class="progress" style="margin-top:12px;"><div class="progress-fill blue" id="capProgress" style="width:0%;"></div></div>
+                <div style="margin-top:20px;padding:14px;background:var(--bg-2);border-radius:10px;border:1px solid var(--border);font-size:12px;color:var(--text-2);line-height:1.9;">
+                  <div style="font-weight:700;color:var(--text);margin-bottom:8px;"><i class="fas fa-circle-info" style="color:var(--primary);"></i> Tips</div>
+                  <div>✅ Face the camera directly</div>
+                  <div>✅ Even lighting on your face</div>
+                  <div>✅ Remove glasses / hat</div>
+                  <div>✅ Capture 3–5 angles</div>
+                  <div>❌ Avoid dark rooms</div>
+                </div>
+              </div>
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:24px;flex-wrap:wrap;gap:10px;">
+              <button class="btn btn-ghost" onclick="toStep(1)"><i class="fas fa-arrow-left"></i> Back</button>
+              <button class="btn btn-primary" id="toStep3Btn" onclick="toStep3()" disabled style="opacity:.4;">Review &amp; Confirm &nbsp;<i class="fas fa-arrow-right"></i></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 3 -->
+      <div class="reg-panel" id="rp3">
+        <div class="card card-glow">
+          <div class="card-header"><div class="card-title"><i class="fas fa-check-double"></i> Confirm Registration</div></div>
+          <div class="card-body">
+            <div id="a3" class="alert alert-error hidden"></div>
+            <div style="display:flex;gap:28px;flex-wrap:wrap;align-items:flex-start;">
+              <div style="text-align:center;flex-shrink:0;">
+                <img id="confImg" style="width:100px;height:100px;border-radius:50%;object-fit:cover;border:3px solid var(--primary);box-shadow:0 0 20px rgba(14,165,233,.3);" src=""/>
+                <div style="font-size:11px;color:var(--text-2);margin-top:8px;" id="confFrames">— frames</div>
+              </div>
+              <div style="flex:1;">
+                <div style="font-size:11px;font-weight:700;color:var(--text-2);letter-spacing:.08em;text-transform:uppercase;margin-bottom:14px;">Student Details</div>
+                <table style="font-size:13px;width:100%;">
+                  <tr><td style="color:var(--text-2);padding:5px 0;width:90px;">Name</td><td style="font-weight:700;" id="c_name">—</td></tr>
+                  <tr><td style="color:var(--text-2);padding:5px 0;">Roll No.</td><td class="mono" style="font-weight:700;" id="c_roll">—</td></tr>
+                  <tr><td style="color:var(--text-2);padding:5px 0;">Class</td>
+                    <td><span class="badge badge-primary" id="c_class" style="font-size:12px;">—</span></td>
+                  </tr>
+                  <tr><td style="color:var(--text-2);padding:5px 0;">Email</td><td id="c_email" style="color:var(--text-2);">—</td></tr>
+                  <tr><td style="color:var(--text-2);padding:5px 0;">Frames</td><td id="c_frames" style="color:var(--success);font-weight:700;">—</td></tr>
+                </table>
+              </div>
+            </div>
+            <div style="margin-top:18px;padding:14px;background:var(--primary-dim);border:1px solid rgba(14,165,233,.2);border-radius:10px;font-size:12px;color:var(--text-2);">
+              <i class="fas fa-dna" style="color:var(--primary);margin-right:6px;"></i>
+              A <strong>128-dimensional face encoding</strong> will be generated using <code style="font-family:var(--mono);background:rgba(14,165,233,.1);padding:1px 6px;border-radius:4px;">face_recognition</code> and saved to Supabase.
+            </div>
+            <div style="display:flex;justify-content:space-between;margin-top:22px;flex-wrap:wrap;gap:10px;">
+              <button class="btn btn-ghost" onclick="toStep(2)"><i class="fas fa-arrow-left"></i> Back</button>
+              <button class="btn btn-success btn-lg" id="submitBtn" onclick="submitReg()"><i class="fas fa-database"></i> Save to Supabase</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- STEP 4 -->
+      <!-- ══ STEP 4: SUCCESS ══ -->
+      <div class="reg-panel" id="rp4">
+
+        <!-- Confetti canvas -->
+        <canvas id="confettiCanvas" style="position:fixed;inset:0;pointer-events:none;z-index:9999;width:100%;height:100%;"></canvas>
+
+        <div class="card" style="border:2px solid var(--success);box-shadow:0 0 40px rgba(16,185,129,.15);overflow:visible;">
+          <div class="card-body" style="padding:0;">
+
+            <!-- Top success banner -->
+            <div style="background:linear-gradient(135deg,rgba(16,185,129,.15),rgba(16,185,129,.05));border-bottom:1px solid rgba(16,185,129,.2);padding:28px 24px;text-align:center;">
+              <!-- Animated checkmark -->
+              <div style="position:relative;display:inline-flex;align-items:center;justify-content:center;margin-bottom:16px;">
+                <div id="successPulse" style="position:absolute;width:90px;height:90px;border-radius:50%;background:rgba(16,185,129,.15);animation:successPulse 1.5s ease-out 3;"></div>
+                <div style="width:72px;height:72px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;font-size:30px;color:#fff;box-shadow:0 0 30px rgba(16,185,129,.5);animation:popIn .5s cubic-bezier(.34,1.56,.64,1) both;">
+                  <i class="fas fa-check"></i>
+                </div>
+              </div>
+
+              <div style="font-size:26px;font-weight:800;color:#fff;margin-bottom:6px;animation:slideUp .4s ease .1s both;">
+                ✅ Successfully Registered!
+              </div>
+              <div style="font-size:14px;color:rgba(52,211,153,.8);animation:slideUp .4s ease .2s both;">
+                Student data &amp; face encoding saved to Supabase database
+              </div>
+            </div>
+
+            <!-- Student info card -->
+            <div style="padding:24px;">
+              <div style="display:flex;align-items:center;gap:18px;padding:18px;background:var(--bg-2);border-radius:12px;border:1px solid var(--border);margin-bottom:20px;animation:slideUp .4s ease .3s both;">
+                <div class="avatar avatar-xl" id="successAvatar" style="border:3px solid var(--success);box-shadow:0 0 20px rgba(16,185,129,.3);">R</div>
+                <div style="flex:1;">
+                  <div style="font-size:20px;font-weight:800;margin-bottom:3px;" id="successName">—</div>
+                  <div class="mono" style="color:var(--text-2);font-size:13px;margin-bottom:8px;" id="successRoll">—</div>
+                  <div id="successMeta" style="display:flex;gap:10px;flex-wrap:wrap;"></div>
+                </div>
+                <div style="flex-shrink:0;">
+                  <span class="badge badge-success" style="font-size:13px;padding:8px 16px;">
+                    <i class="fas fa-check-circle"></i> Active
+                  </span>
+                </div>
+              </div>
+
+              <!-- Stats row -->
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;animation:slideUp .4s ease .35s both;" id="encStats"></div>
+
+              <!-- Database saved indicator -->
+              <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;background:rgba(14,165,233,.06);border:1px solid rgba(14,165,233,.2);border-radius:10px;margin-bottom:20px;animation:slideUp .4s ease .4s both;">
+                <div style="width:38px;height:38px;border-radius:9px;background:rgba(14,165,233,.15);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+                  <i class="fas fa-database" style="color:var(--primary);font-size:16px;"></i>
+                </div>
+                <div>
+                  <div style="font-size:13px;font-weight:700;color:var(--primary);">Saved to Supabase ✓</div>
+                  <div style="font-size:12px;color:var(--text-2);">Face encoding (128D) stored securely in database</div>
+                </div>
+                <div style="margin-left:auto;">
+                  <span class="badge badge-primary mono" style="font-size:10px;">128D</span>
+                </div>
+              </div>
+
+              <!-- Encoding preview -->
+              <div class="enc-box" style="margin-bottom:20px;animation:slideUp .4s ease .45s both;">
+                <div style="font-size:10px;color:var(--text-2);font-weight:700;letter-spacing:.08em;margin-bottom:6px;text-transform:uppercase;">Face Encoding Preview</div>
+                <div class="enc-txt" id="encPrev">—</div>
+              </div>
+
+              <!-- Action buttons -->
+              <div style="display:flex;gap:10px;flex-wrap:wrap;animation:slideUp .4s ease .5s both;">
+                <button class="btn btn-success" onclick="again()" style="flex:1;justify-content:center;min-width:160px;">
+                  <i class="fas fa-user-plus"></i> Register Another Student
+                </button>
+                <button class="btn btn-primary" onclick="location.href='attendance.html'" style="flex:1;justify-content:center;min-width:130px;">
+                  <i class="fas fa-camera"></i> Mark Attendance
+                </button>
+                <button class="btn btn-ghost" onclick="location.href='students.html'" style="flex:1;justify-content:center;min-width:120px;">
+                  <i class="fas fa-users"></i> All Students
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+<script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/sidebar.js"></script>
+<script src="../js/camera.js"></script>
+<script>
+requireAuth();
+buildLayout('register','Register Student','BIOMETRIC ENROLL');
+
+let cam=null, captured=[], lastQ=null, detectInt=null;
+const MAX=5;
+
+(async()=>{
+  try {
+    const cls = await API.getClasses();
+    document.getElementById('s_class').innerHTML =
+      '<option value="">Select class</option>' +
+      cls.map(c=>`<option value="${c.class_name}">${c.class_name} — ${c.subject}</option>`).join('');
+  } catch(e){}
+})();
+
+function livePreview() {
+  const name    = document.getElementById('s_name').value.trim();
+  const roll    = document.getElementById('s_roll').value.trim();
+  const dept    = document.getElementById('s_dept').value;
+  const year    = document.getElementById('s_year').value;
+  const section = document.getElementById('s_section').value;
+
+  // Auto-generate class string e.g. "BCA 1st A"
+  const autoClass = (dept && year && section) ? `${dept} ${year} ${section}` : '';
+  document.getElementById('s_class').value = autoClass;
+  const dispEl = document.getElementById('s_class_display');
+  if (dispEl) dispEl.value = autoClass || '';
+
+  if (!name && !roll) { document.getElementById('preview').style.display='none'; return; }
+  document.getElementById('preview').style.display = 'block';
+  document.getElementById('pv_name').textContent    = name    || '—';
+  document.getElementById('pv_roll').textContent    = roll    || '—';
+  document.getElementById('pv_dept').textContent    = dept    || '—';
+  document.getElementById('pv_year').textContent    = year    || '—';
+  document.getElementById('pv_section').textContent = section || '—';
+  document.getElementById('pv_class').textContent   = autoClass || '—';
+}
+
+function wizUpdate(cur) {
+  [1,2,3,4].forEach(i=>{
+    const c=document.getElementById('wc'+i), l=document.getElementById('wl'+i);
+    if(i<cur){c.className='wiz-circle done';c.innerHTML='<i class="fas fa-check"></i>';l.className='wiz-lbl';}
+    else if(i===cur){c.className='wiz-circle active';c.textContent=i;l.className='wiz-lbl active';}
+    else{c.className='wiz-circle';c.textContent=i;l.className='wiz-lbl';}
+    if(i<4){document.getElementById('wln'+i).className='wiz-line'+(i<cur?' done':'');}
+  });
+}
+
+function toStep(n){
+  [1,2,3,4].forEach(i=>document.getElementById('rp'+i).classList.toggle('active',i===n));
+  wizUpdate(n);
+}
+
+function toStep2(){
+  const name    = document.getElementById('s_name').value.trim();
+  const roll    = document.getElementById('s_roll').value.trim();
+  const dept    = document.getElementById('s_dept').value;
+  const year    = document.getElementById('s_year').value;
+  const section = document.getElementById('s_section').value;
+  const a = document.getElementById('a1');
+
+  if (!name)    { a.innerHTML='<i class="fas fa-exclamation-circle"></i> Student name is required';  a.classList.remove('hidden'); return; }
+  if (!roll)    { a.innerHTML='<i class="fas fa-exclamation-circle"></i> Roll number is required';   a.classList.remove('hidden'); return; }
+  if (!dept)    { a.innerHTML='<i class="fas fa-exclamation-circle"></i> Please select Department'; a.classList.remove('hidden'); return; }
+  if (!year)    { a.innerHTML='<i class="fas fa-exclamation-circle"></i> Please select Year';       a.classList.remove('hidden'); return; }
+  if (!section) { a.innerHTML='<i class="fas fa-exclamation-circle"></i> Please select Section';    a.classList.remove('hidden'); return; }
+
+  a.classList.add('hidden');
+  toStep(2);
+}
+
+function toStep3(){
+  if(captured.length<1){showToast('Capture at least 1 frame','warning');return;}
+  stopDetect();
+  const dept    = document.getElementById('s_dept').value;
+  const year    = document.getElementById('s_year').value;
+  const section = document.getElementById('s_section').value;
+  const autoClass = (dept && year && section) ? `${dept} ${year} ${section}` : '—';
+
+  document.getElementById('c_name').textContent   = document.getElementById('s_name').value.trim();
+  document.getElementById('c_roll').textContent   = document.getElementById('s_roll').value.trim();
+  document.getElementById('c_class').textContent  = autoClass;
+  document.getElementById('c_email').textContent  = document.getElementById('s_email').value || '—';
+  document.getElementById('c_frames').textContent = `${captured.length} frame(s)`;
+  document.getElementById('confImg').src=captured[0];
+  document.getElementById('confFrames').textContent=`${captured.length} frames captured`;
+  toStep(3);
+}
+
+async function startCam(){
+  cam=new CameraManager('camVid','camCanvas');
+  if(await cam.start()){
+    document.getElementById('camIdle').style.display='none';
+    document.getElementById('camVid').style.display='block';
+    document.getElementById('camBar').style.display='flex';
+    document.getElementById('autoBtn').style.display='inline-flex';
+    startDetect();
+  } else showToast('Camera denied','error');
+}
+
+function startDetect(){
+  detectInt=setInterval(async()=>{
+    if(!cam?.active)return;
+    const img=cam.captureBase64();if(!img)return;
+    try{
+      const r=await API.request('POST','/students/check-face-quality',{face_image:img});
+      lastQ=r.quality;updateCamUI(r);
+      if(r.annotated){
+        const c=document.getElementById('camCanvas'),ctx=c.getContext('2d');
+        const im=new Image();im.onload=()=>{c.width=im.width;c.height=im.height;ctx.drawImage(im,0,0);};
+        im.src='data:image/jpeg;base64,'+r.annotated;
+        document.getElementById('camCanvas').style.display='block';
+      }
+    }catch(e){}
+  },1200);
+}
+function stopDetect(){clearInterval(detectInt);detectInt=null;}
+
+function updateCamUI(r){
+  const oval=document.getElementById('camOval'),st=document.getElementById('camStatusTxt'),sc=document.getElementById('camQScore'),btn=document.getElementById('capBtn');
+  if(r.ready){
+    oval.className='cam-oval ok';st.innerHTML='<span style="color:var(--success);">✓ Ready to capture</span>';
+    btn.disabled=(captured.length>=MAX);
+  }else if(r.faces_detected>0){
+    oval.className='cam-oval warn';st.innerHTML=`<span style="color:var(--warning);">${r.quality?.issues?.[0]||'Adjust position'}</span>`;
+    btn.disabled=true;
+  }else{
+    oval.className='cam-oval';st.innerHTML='<span style="color:var(--text-2);">No face detected</span>';btn.disabled=true;
+  }
+  sc.textContent=r.ready?'✓ Good':'Adjusting';
+  const q=r.quality||{};
+  document.getElementById('qpills').innerHTML=[
+    {l:'Bright:'+Math.round(q.brightness||0),ok:q.brightness>40&&q.brightness<220},
+    {l:'Blur:'+Math.round(q.blur||0),ok:q.blur>60},
+    {l:'Faces:'+q.faces,ok:q.faces===1},
+    {l:'Size:'+q.face_ratio+'%',ok:q.face_ratio>5&&q.face_ratio<85},
+  ].map(p=>`<span class="qpill ${p.ok?'ok':'fail'}"><i class="fas fa-${p.ok?'check':'times'}"></i>${p.l}</span>`).join('');
+}
+
+function captureFrame(){
+  if(!cam?.active||captured.length>=MAX)return;
+  if(!lastQ?.ok){showToast('Wait for green oval','warning');return;}
+  const img=cam.captureBase64();if(!img)return;
+  captured.push(img);renderThumbs();showToast(`Frame ${captured.length} captured!`,'success');
+}
+
+async function autoCapture(){
+  if(!cam?.active){showToast('Start camera first','warning');return;}
+  const btn=document.getElementById('autoBtn');btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i>';
+  captured=[];renderThumbs();let tries=0;
+  const iv=setInterval(async()=>{
+    tries++;if(captured.length>=MAX||tries>20){clearInterval(iv);btn.disabled=false;btn.innerHTML='<i class="fas fa-magic"></i> Auto';
+      if(captured.length)showToast(`Auto: ${captured.length} frames!`,'success');else showToast('Try manually','warning');return;}
+    const img=cam.captureBase64();if(!img)return;
+    try{const r=await API.request('POST','/students/check-face-quality',{face_image:img});if(r.ready){captured.push(img);renderThumbs();}}catch(e){}
+  },600);
+}
+
+function clearFrames(){captured=[];renderThumbs();}
+
+function renderThumbs(){
+  const strip=document.getElementById('thumbStrip');
+  strip.innerHTML='';
+  captured.forEach((img,i)=>{
+    strip.innerHTML+=`<div class="thumb filled"><img src="${img}"/><div class="check"><i class="fas fa-check"></i></div></div>`;
+  });
+  for(let i=captured.length;i<MAX;i++) strip.innerHTML+=`<div class="thumb"><i class="fas fa-camera" style="color:var(--border);font-size:16px;"></i></div>`;
+  document.getElementById('capCount').textContent=captured.length;
+  document.getElementById('capProgress').style.width=(captured.length/MAX*100)+'%';
+  const ok=captured.length>=1;
+  document.getElementById('toStep3Btn').disabled=!ok;
+  document.getElementById('toStep3Btn').style.opacity=ok?'1':'.4';
+  document.getElementById('clearBtn').style.display=captured.length?'inline-flex':'none';
+}
+
+async function submitReg(){
+  const btn=document.getElementById('submitBtn');const a3=document.getElementById('a3');
+  btn.disabled=true;btn.innerHTML='<i class="fas fa-spinner fa-spin"></i> Generating encoding…';
+  a3.classList.add('hidden');
+  try{
+    const res=await API.request('POST','/students/register',{
+      name:         document.getElementById('s_name').value.trim(),
+      roll_number:  document.getElementById('s_roll').value.trim(),
+      department:   document.getElementById('s_dept').value    || null,
+      year:         document.getElementById('s_year').value    || null,
+      section:      document.getElementById('s_section').value || null,
+      class_:       document.getElementById('s_class').value   || null,
+      email:        document.getElementById('s_email').value   || null,
+      face_images:  captured,
+    });
+    if(res.success) showSuccess(res);
+    else throw new Error(res.message);
+  }catch(err){
+    let msg = err.message || 'Unknown error';
+    // Friendly messages for common errors
+    if(msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('fetch')){
+      msg = '❌ Backend not reachable at localhost:8000<br><small>Make sure you ran: <code>python main.py</code></small>';
+    } else if(msg.includes('already registered') || msg.includes('already exists')){
+      msg = '⚠️ This roll number is already registered. Use a different roll number.';
+    } else if(msg.includes('face') || msg.includes('encoding')){
+      msg = '📷 Face encoding failed: ' + msg + '<br><small>Try re-capturing with better lighting</small>';
+    } else if(msg.includes('Database') || msg.includes('Supabase') || msg.includes('supabase')){
+      msg = '🗄️ Database error: ' + msg + '<br><small>Check your Supabase connection in .env file</small>';
+    }
+    a3.innerHTML=`<i class="fas fa-exclamation-circle"></i> ${msg}`;a3.classList.remove('hidden');
+    btn.disabled=false;btn.innerHTML='<i class="fas fa-database"></i> Save to Supabase';
+  }
+}
+
+function showSuccess(res){
+  const s   = res.student;
+  const st  = res.encoding_stats || {};
+
+  // Avatar + name
+  document.getElementById('successAvatar').textContent = initials(s.name);
+  document.getElementById('successName').textContent   = s.name;
+  document.getElementById('successRoll').textContent   = 'Roll No: ' + s.roll_number;
+
+  // Meta badges (dept, year, section, email)
+  const meta = [];
+  meta.push(`<span class="badge badge-primary mono"><i class="fas fa-hashtag"></i> ${s.roll_number}</span>`);
+  if (s.department) meta.push(`<span class="badge badge-muted"><i class="fas fa-building-columns"></i> ${s.department}</span>`);
+  if (s.year)       meta.push(`<span class="badge badge-muted"><i class="fas fa-layer-group"></i> ${s.year} Year</span>`);
+  if (s.section)    meta.push(`<span class="badge badge-muted"><i class="fas fa-users-rectangle"></i> Section ${s.section}</span>`);
+  if (s.class_)     meta.push(`<span class="badge" style="background:rgba(16,185,129,.15);color:#34d399;border:1px solid rgba(16,185,129,.25);"><i class="fas fa-chalkboard-teacher"></i> ${s.class_}</span>`);
+  if (s.email)      meta.push(`<span class="badge badge-muted"><i class="fas fa-envelope"></i> ${s.email}</span>`);
+  document.getElementById('successMeta').innerHTML = meta.join('');
+
+  // Encoding stats grid
+  document.getElementById('encStats').innerHTML = [
+    { v: st.frames_submitted || '—', l: 'Frames',    color: 'var(--primary)' },
+    { v: st.frames_used       || '—', l: 'Used',     color: 'var(--success)' },
+    { v: st.frames_rejected   || '0', l: 'Rejected', color: 'var(--warning)' },
+    { v: '128D',                       l: 'Encoding', color: 'var(--cyan)'   },
+  ].map(x => `
+    <div style="text-align:center;padding:12px 8px;background:var(--bg-2);border-radius:10px;border:1px solid var(--border);">
+      <div class="mono" style="font-size:20px;font-weight:800;color:${x.color};">${x.v}</div>
+      <div style="font-size:10px;color:var(--text-2);margin-top:3px;text-transform:uppercase;letter-spacing:.04em;">${x.l}</div>
+    </div>`).join('');
+
+  // Encoding preview
+  if (s.face_encoding) {
+    try {
+      const enc = JSON.parse(s.face_encoding);
+      document.getElementById('encPrev').textContent =
+        '[ ' + enc.slice(0, 16).map(v => v.toFixed(4)).join(', ') + ' … ]';
+    } catch(e) {}
+  }
+
+  // Stop camera
+  if (cam) { cam.stop(); cam = null; }
+  stopDetect();
+
+  // Go to step 4
+  toStep(4);
+
+  // Launch confetti 🎉
+  launchConfetti();
+
+  // Show toast
+  showToast(`${s.name} registered successfully!`, 'success', 5000);
+}
+
+/* ── Confetti animation ─────────────────────────── */
+function launchConfetti() {
+  const canvas = document.getElementById('confettiCanvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  canvas.width  = window.innerWidth;
+  canvas.height = window.innerHeight;
+
+  const colors = ['#0ea5e9','#22d3ee','#10b981','#f59e0b','#f43f5e','#a78bfa','#34d399'];
+  const pieces = Array.from({ length: 120 }, () => ({
+    x:     Math.random() * canvas.width,
+    y:     Math.random() * canvas.height - canvas.height,
+    r:     Math.random() * 7 + 3,
+    d:     Math.random() * 80 + 20,
+    color: colors[Math.floor(Math.random() * colors.length)],
+    tilt:  Math.random() * 10 - 10,
+    tiltAngle: 0,
+    tiltSpeed: Math.random() * 0.07 + 0.05,
+  }));
+
+  let frame = 0;
+  const maxFrames = 180;
+
+  function draw() {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    pieces.forEach(p => {
+      p.tiltAngle += p.tiltSpeed;
+      p.y += (Math.cos(frame * 0.02 + p.d) + 1.5) * 2;
+      p.tilt = Math.sin(p.tiltAngle) * 12;
+      if (p.y > canvas.height) { p.y = -8; p.x = Math.random() * canvas.width; }
+      ctx.beginPath();
+      ctx.lineWidth = p.r;
+      ctx.strokeStyle = p.color;
+      ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
+      ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
+      ctx.stroke();
+    });
+    frame++;
+    if (frame < maxFrames) requestAnimationFrame(draw);
+    else { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+  }
+  draw();
+}
+
+function again(){
+  captured=[];lastQ=null;
+  ['s_name','s_roll','s_email','s_class_display'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  ['s_class','s_dept','s_year','s_section'].forEach(id=>{
+    const el=document.getElementById(id); if(el) el.value='';
+  });
+  document.getElementById('preview').style.display='none';
+  document.getElementById('camIdle').style.display='flex';
+  document.getElementById('camVid').style.display='none';
+  document.getElementById('camCanvas').style.display='none';
+  document.getElementById('camBar').style.display='none';
+  document.getElementById('autoBtn').style.display='none';
+  renderThumbs();toStep(1);
+}
+renderThumbs();
+</script>
+</body>
+</html>

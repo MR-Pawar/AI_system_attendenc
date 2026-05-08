@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0"/>
+  <title>Dashboard — AI Face Attendance</title>
+  <link rel="stylesheet" href="../css/style.css"/>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css"/>
+  <style>
+    .kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:20px;}
+    .kpi{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px;position:relative;overflow:hidden;transition:border-color .2s;}
+    .kpi:hover{border-color:var(--border-2);}
+    .kpi-icon{font-size:18px;margin-bottom:10px;}
+    .kpi.blue .kpi-icon{color:var(--primary);}
+    .kpi.green .kpi-icon{color:var(--success);}
+    .kpi.red   .kpi-icon{color:var(--danger);}
+    .kpi.amber .kpi-icon{color:var(--warning);}
+    .kpi.teal  .kpi-icon{color:var(--cyan);}
+    .kpi-val{font-size:26px;font-weight:800;font-family:var(--mono);line-height:1;}
+    .kpi-lbl{font-size:11px;color:var(--text-2);margin-top:4px;text-transform:uppercase;letter-spacing:.04em;}
+
+    .chart-bars{display:flex;align-items:flex-end;gap:5px;height:110px;}
+    .chart-col{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;}
+    .chart-bar{width:100%;border-radius:4px 4px 0 0;min-height:3px;background:var(--primary);opacity:.55;}
+    .chart-bar.today{opacity:1;background:linear-gradient(180deg,var(--cyan),var(--primary));}
+    .chart-cnt{font-size:9px;color:var(--text-2);font-family:var(--mono);}
+    .chart-day{font-size:10px;color:var(--text-3);}
+
+    .donut-svg{transform:rotate(-90deg);}
+    .donut-track{fill:none;stroke:var(--border);stroke-width:10;}
+    .donut-fill{fill:none;stroke:var(--success);stroke-width:10;stroke-linecap:round;transition:stroke-dasharray .8s;}
+
+    .activity-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid rgba(255,255,255,.04);}
+    .activity-row:last-child{border-bottom:none;}
+
+    .qaction{display:flex;flex-direction:column;align-items:center;gap:7px;padding:16px 8px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);cursor:pointer;transition:all .18s;text-align:center;}
+    .qaction:hover{border-color:var(--primary);background:var(--primary-dim);}
+    .qaction i{font-size:20px;color:var(--primary);}
+    .qaction span{font-size:11px;font-weight:600;color:var(--text-2);}
+
+    @media(max-width:640px){
+      .kpi-grid{grid-template-columns:1fr 1fr;}
+      .kpi-val{font-size:22px;}
+      .chart-bars{height:80px;}
+      .chart-cnt{display:none;}
+      .qgrid{grid-template-columns:repeat(2,1fr)!important;}
+    }
+  </style>
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar" id="topbar"></header>
+
+    <div class="content-area">
+      <!-- KPIs -->
+      <div class="kpi-grid" id="kpiGrid">
+        <div class="kpi blue"><div class="kpi-icon"><i class="fas fa-spinner fa-spin"></i></div><div class="kpi-val">—</div><div class="kpi-lbl">Loading</div></div>
+      </div>
+
+      <!-- Chart + Donut row -->
+      <div class="grid-2" style="margin-bottom:16px;">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="fas fa-chart-bar"></i> 7-Day Trend</div>
+            <span class="badge badge-muted mono" id="chartDate" style="font-size:10px;">—</span>
+          </div>
+          <div class="card-body" style="padding:14px 16px;">
+            <div class="chart-bars" id="weeklyChart">
+              <div style="color:var(--text-2);font-size:13px;">Loading…</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title"><i class="fas fa-circle-half-stroke"></i> Today</div></div>
+          <div class="card-body" style="display:flex;align-items:center;gap:16px;padding:14px 16px;">
+            <div style="position:relative;flex-shrink:0;">
+              <svg width="100" height="100" viewBox="0 0 110 110" class="donut-svg">
+                <circle class="donut-track" cx="55" cy="55" r="42"/>
+                <circle class="donut-fill" id="donutFill" cx="55" cy="55" r="42" stroke-dasharray="0 264"/>
+              </svg>
+              <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+                <div id="donutPct" style="font-size:16px;font-weight:800;font-family:var(--mono);color:var(--success);">—</div>
+                <div style="font-size:9px;color:var(--text-2);">present</div>
+              </div>
+            </div>
+            <div style="flex:1;" id="donutLegend"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Activity + Quick Actions -->
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title"><i class="fas fa-bolt"></i> Recent</div>
+            <button class="btn btn-ghost btn-sm" onclick="location.href='history.html'">All</button>
+          </div>
+          <div class="card-body" style="padding:6px 14px;" id="activityList">
+            <div style="text-align:center;padding:20px;color:var(--text-2);font-size:13px;"><i class="fas fa-spinner fa-spin"></i></div>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-header"><div class="card-title"><i class="fas fa-grid-2"></i> Quick Actions</div></div>
+          <div class="card-body" style="padding:14px;">
+            <div class="qgrid" style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <div class="qaction" onclick="location.href='attendance.html'"><i class="fas fa-camera"></i><span>Attendance</span></div>
+              <div class="qaction" onclick="location.href='register.html'"><i class="fas fa-user-plus"></i><span>Register</span></div>
+              <div class="qaction" onclick="location.href='history.html'"><i class="fas fa-file-csv"></i><span>Export</span></div>
+              <div class="qaction" onclick="location.href='students.html'"><i class="fas fa-users"></i><span>Students</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/sidebar.js"></script>
+<script>
+requireAuth();
+buildLayout('dashboard','Dashboard','ADMIN');
+
+async function loadAll() {
+  try {
+    const d = await API.getDashboardStats();
+    renderKPI(d);
+    renderChart(d.weekly_trend||[]);
+    renderDonut(d);
+    renderActivity(d.recent_attendance||[]);
+  } catch(e) { showToast('Failed to load','error'); }
+}
+
+function renderKPI(d) {
+  document.getElementById('kpiGrid').innerHTML = [
+    {cls:'blue',  icon:'fa-users',       val:d.total_students,      lbl:'Students'},
+    {cls:'green', icon:'fa-user-check',  val:d.present_today,       lbl:'Present'},
+    {cls:'red',   icon:'fa-user-xmark',  val:d.absent_today,        lbl:'Absent'},
+    {cls:'amber', icon:'fa-percent',     val:d.attendance_rate+'%', lbl:'Rate'},
+    {cls:'teal',  icon:'fa-chalkboard-teacher', val:d.total_classes||0, lbl:'Classes'},
+  ].map(k=>`
+    <div class="kpi ${k.cls}">
+      <div class="kpi-icon"><i class="fas ${k.icon}"></i></div>
+      <div class="kpi-val">${k.val}</div>
+      <div class="kpi-lbl">${k.lbl}</div>
+    </div>`).join('');
+  document.getElementById('chartDate').textContent = d.date||'';
+}
+
+function renderChart(weekly) {
+  const max = Math.max(...weekly.map(w=>w.count),1);
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('weeklyChart').innerHTML = weekly.map(w=>`
+    <div class="chart-col">
+      <div class="chart-cnt">${w.count}</div>
+      <div class="chart-bar ${w.date===today?'today':''}" style="height:${Math.max(4,(w.count/max)*90)}px;"></div>
+      <div class="chart-day">${w.day}</div>
+    </div>`).join('');
+}
+
+function renderDonut(d) {
+  const total=d.total_students||1;
+  const pct=Math.round(d.present_today/total*100);
+  const circ=2*Math.PI*42;
+  document.getElementById('donutFill').setAttribute('stroke-dasharray',`${(pct/100)*circ} ${circ}`);
+  document.getElementById('donutPct').textContent=pct+'%';
+  document.getElementById('donutLegend').innerHTML=[
+    {label:'Present',val:d.present_today,color:'var(--success)'},
+    {label:'Absent', val:d.absent_today, color:'var(--danger)'},
+  ].map(item=>`
+    <div style="margin-bottom:10px;">
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px;">
+        <span style="color:${item.color};font-weight:600;">${item.label}</span>
+        <span class="mono" style="font-weight:700;">${item.val}</span>
+      </div>
+      <div class="progress"><div class="progress-fill" style="width:${Math.round(item.val/total*100)}%;background:${item.color};"></div></div>
+    </div>`).join('');
+}
+
+function renderActivity(records) {
+  if (!records.length) {
+    document.getElementById('activityList').innerHTML='<div style="text-align:center;padding:20px;color:var(--text-2);font-size:13px;"><i class="fas fa-inbox" style="display:block;font-size:22px;margin-bottom:8px;"></i>No activity</div>';
+    return;
+  }
+  document.getElementById('activityList').innerHTML=records.map(r=>{
+    const s=r.students||{}; const init=initials(s.name||'?');
+    return `<div class="activity-row">
+      <div class="avatar avatar-sm">${init}</div>
+      <div style="flex:1;min-width:0;">
+        <div style="font-weight:600;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${s.name||'—'}</div>
+        <div style="font-size:11px;color:var(--text-2);">${s.class||''}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0;">
+        <div class="mono" style="font-size:11px;color:var(--success);">${r.confidence?r.confidence+'%':''}</div>
+        <div style="font-size:11px;color:var(--text-2);">${formatTime(r.time)}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+loadAll();
+</script>
+</body>
+</html>

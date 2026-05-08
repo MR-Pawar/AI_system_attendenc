@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Students – AI Face Attendance</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar">
+    <div class="sidebar-logo">
+      <div class="logo-icon"><i class="fas fa-brain"></i></div>
+      <span>AI Face<br>Attendance</span>
+    </div>
+    <nav class="sidebar-nav">
+      <div class="nav-label">Main</div>
+      <div class="nav-item" onclick="navigateTo('dashboard.html')"><i class="fas fa-th-large"></i> Dashboard</div>
+      <div class="nav-item" onclick="navigateTo('attendance.html')"><i class="fas fa-camera"></i> Mark Attendance</div>
+      <div class="nav-label">Management</div>
+      <div class="nav-item active" onclick="navigateTo('students.html')"><i class="fas fa-user-graduate"></i> Students</div>
+      <div class="nav-item" onclick="navigateTo('classes.html')"><i class="fas fa-chalkboard-teacher"></i> Classes</div>
+      <div class="nav-item" onclick="navigateTo('history.html')"><i class="fas fa-history"></i> Attendance History</div>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="admin-badge">
+        <div class="admin-avatar" id="adminAvatar">A</div>
+        <div class="admin-info"><div class="admin-name" id="adminName">Admin</div><div class="admin-role">Administrator</div></div>
+      </div>
+      <button class="btn btn-secondary btn-full btn-sm" onclick="logout()"><i class="fas fa-sign-out-alt"></i> Logout</button>
+    </div>
+  </aside>
+
+  <div class="main-content">
+    <header class="topbar">
+      <div class="topbar-title"><i class="fas fa-user-graduate" style="color:var(--primary)"></i> &nbsp;Students</div>
+      <div class="topbar-actions">
+        <button class="btn btn-primary btn-sm" onclick="navigateTo('register.html')">
+          <i class="fas fa-user-plus"></i> Register Student
+        </button>
+      </div>
+    </header>
+
+    <div class="content-area">
+      <!-- Filters -->
+      <div class="card" style="margin-bottom:24px;">
+        <div class="card-body" style="padding:16px 22px;">
+          <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:center;">
+            <div class="search-bar" style="flex:1;min-width:200px;">
+              <i class="fas fa-search"></i>
+              <input type="text" id="searchInput" placeholder="Search by name or roll no..." oninput="filterStudents()" />
+            </div>
+            <select id="classFilter" onchange="filterStudents()"
+              style="background:var(--bg-input);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;">
+              <option value="">All Classes</option>
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="loadStudents()"><i class="fas fa-sync"></i></button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Students Table -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-list"></i> All Students</div>
+          <span id="studentCount" style="color:var(--text-muted);font-size:13px;"></span>
+        </div>
+        <div class="card-body" style="padding:0;">
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Student</th><th>Roll No.</th><th>Class</th><th>Email</th><th>Face</th><th>Actions</th></tr>
+              </thead>
+              <tbody id="studentsBody">
+                <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">
+                  <i class="fas fa-spinner fa-spin"></i> Loading...
+                </td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Register Modal -->
+<div class="modal-backdrop hidden" id="registerModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fas fa-user-plus"></i> Register New Student</div>
+      <button class="modal-close" onclick="closeRegisterModal()"><i class="fas fa-times"></i></button>
+    </div>
+    <div class="modal-body">
+      <div id="regAlert" class="alert hidden"></div>
+      <div style="display:flex;gap:24px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:200px;">
+          <div class="form-group">
+            <label><i class="fas fa-sort-numeric-up"></i> Roll Number</label>
+            <input type="text" id="regRoll" placeholder="e.g. 2024001" />
+          </div>
+          <div class="form-group">
+            <label><i class="fas fa-user"></i> Full Name</label>
+            <input type="text" id="regName" placeholder="Full name" />
+          </div>
+          <div class="form-group">
+            <label><i class="fas fa-envelope"></i> Email (optional)</label>
+            <input type="email" id="regEmail" placeholder="student@email.com" />
+          </div>
+          <div class="form-group">
+            <label><i class="fas fa-chalkboard-teacher"></i> Class</label>
+            <select id="regClass">
+              <option value="">Select class</option>
+            </select>
+          </div>
+        </div>
+        <div style="flex:1;min-width:200px;">
+          <label style="font-size:13px;font-weight:600;color:var(--text-muted);margin-bottom:8px;display:block;">
+            <i class="fas fa-camera"></i> Face Capture
+          </label>
+          <div class="camera-container" id="regCameraContainer">
+            <div class="camera-overlay" id="regCameraOverlay">
+              <button class="btn btn-primary" onclick="startRegCamera()"><i class="fas fa-video"></i> Start Camera</button>
+            </div>
+            <video id="regVideo" autoplay muted playsinline></video>
+            <canvas id="regCanvas" style="display:none;"></canvas>
+            <div class="camera-frame"><div class="face-guide" id="regFaceGuide"></div></div>
+          </div>
+          <div class="camera-controls">
+            <button class="capture-btn" onclick="captureRegFace()" title="Capture"><i class="fas fa-camera"></i></button>
+            <button class="btn btn-secondary btn-sm" onclick="retakeRegFace()" id="retakeBtn" style="display:none;"><i class="fas fa-redo"></i> Retake</button>
+          </div>
+          <div id="capturedPreview" style="display:none;margin-top:8px;text-align:center;">
+            <img id="capturedImg" style="width:80px;height:80px;border-radius:50%;object-fit:cover;border:3px solid var(--success);" />
+            <div style="font-size:12px;color:var(--success);margin-top:4px;"><i class="fas fa-check"></i> Face captured</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeRegisterModal()">Cancel</button>
+      <button class="btn btn-primary" id="regSubmitBtn" onclick="submitRegistration()">
+        <i class="fas fa-save"></i> Register Student
+      </button>
+    </div>
+  </div>
+</div>
+
+<script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/camera.js"></script>
+<script>
+  requireAuth();
+  let allStudents = [];
+  let capturedFaceImage = null;
+  let regCamera = null;
+
+  async function init() {
+    await Promise.all([loadStudents(), loadClassOptions()]);
+  }
+
+  async function loadClassOptions() {
+    try {
+      const classes = await API.getClasses();
+      const options = classes.map(c => `<option value="${c.class_name}">${c.class_name} – ${c.subject}</option>`).join('');
+      document.getElementById('classFilter').innerHTML = '<option value="">All Classes</option>' + options;
+      document.getElementById('regClass').innerHTML = '<option value="">Select class</option>' + options;
+    } catch(e) { /* ignore */ }
+  }
+
+  async function loadStudents() {
+    try {
+      allStudents = await API.getStudents();
+      renderStudents(allStudents);
+    } catch (err) { showToast('Failed to load students: ' + err.message, 'error'); }
+  }
+
+  function renderStudents(students) {
+    document.getElementById('studentCount').textContent = `${students.length} students`;
+    if (!students.length) {
+      document.getElementById('studentsBody').innerHTML = `
+        <tr><td colspan="6" style="text-align:center;padding:40px;color:var(--text-muted);">
+          <i class="fas fa-user-slash" style="font-size:32px;display:block;margin-bottom:12px;"></i>No students found
+        </td></tr>`; return;
+    }
+    document.getElementById('studentsBody').innerHTML = students.map(s => {
+      const initials = s.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+      return `<tr>
+        <td><div style="display:flex;align-items:center;gap:10px;">
+          <div class="student-avatar">${initials}</div>
+          <span style="font-weight:600;">${s.name}</span>
+        </div></td>
+        <td style="color:var(--text-muted);">${s.roll_number}</td>
+        <td>${s.class_ || '—'}</td>
+        <td style="color:var(--text-muted);font-size:13px;">${s.email || '—'}</td>
+        <td>${s.face_encoding
+          ? '<span class="badge badge-success"><i class="fas fa-check"></i> Set</span>'
+          : '<span class="badge badge-warning"><i class="fas fa-exclamation"></i> None</span>'}</td>
+        <td><div style="display:flex;gap:6px;">
+          <button class="btn btn-sm btn-danger" onclick="deleteStudent('${s.id}','${s.name.replace(/'/g,"\\'")}')">
+            <i class="fas fa-trash"></i>
+          </button>
+        </div></td>
+      </tr>`;
+    }).join('');
+  }
+
+  function filterStudents() {
+    const q   = document.getElementById('searchInput').value.toLowerCase();
+    const cls = document.getElementById('classFilter').value.toLowerCase();
+    renderStudents(allStudents.filter(s =>
+      (!q   || s.name.toLowerCase().includes(q) || s.roll_number.toLowerCase().includes(q)) &&
+      (!cls || (s.class_ || '').toLowerCase() === cls)
+    ));
+  }
+
+  function openRegisterModal() {
+    capturedFaceImage = null;
+    document.getElementById('registerModal').classList.remove('hidden');
+  }
+  function closeRegisterModal() {
+    document.getElementById('registerModal').classList.add('hidden');
+    if (regCamera) { regCamera.stop(); regCamera = null; }
+    document.getElementById('regCameraOverlay').classList.remove('hidden');
+    document.getElementById('capturedPreview').style.display = 'none';
+    document.getElementById('retakeBtn').style.display = 'none';
+    ['regRoll','regName','regEmail'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('regClass').value = '';
+    document.getElementById('regAlert').className = 'alert hidden';
+  }
+
+  async function startRegCamera() {
+    regCamera = new CameraManager('regVideo', 'regCanvas');
+    const ok = await regCamera.start();
+    if (ok) document.getElementById('regCameraOverlay').classList.add('hidden');
+    else showToast('Camera access denied', 'error');
+  }
+
+  function captureRegFace() {
+    if (!regCamera?.active) { showToast('Start camera first', 'warning'); return; }
+    capturedFaceImage = regCamera.captureBase64();
+    if (capturedFaceImage) {
+      document.getElementById('capturedImg').src = capturedFaceImage;
+      document.getElementById('capturedPreview').style.display = 'block';
+      document.getElementById('retakeBtn').style.display = 'inline-flex';
+      document.getElementById('regFaceGuide').classList.add('detected');
+      showToast('Face captured!', 'success');
+    }
+  }
+  function retakeRegFace() {
+    capturedFaceImage = null;
+    document.getElementById('capturedPreview').style.display = 'none';
+    document.getElementById('retakeBtn').style.display = 'none';
+    document.getElementById('regFaceGuide').classList.remove('detected');
+  }
+
+  async function submitRegistration() {
+    const btn   = document.getElementById('regSubmitBtn');
+    const alert = document.getElementById('regAlert');
+    const roll  = document.getElementById('regRoll').value.trim();
+    const name  = document.getElementById('regName').value.trim();
+    const email = document.getElementById('regEmail').value.trim();
+    const cls   = document.getElementById('regClass').value;
+
+    if (!roll || !name) { alert.textContent = 'Roll number and name are required'; alert.className = 'alert alert-error'; return; }
+    if (!capturedFaceImage) { alert.textContent = 'Please capture face photo'; alert.className = 'alert alert-error'; return; }
+
+    btn.disabled = true; btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Registering...';
+    try {
+      await API.registerStudent({ name, roll_number: roll, class_: cls, email }, capturedFaceImage);
+      showToast(`${name} registered!`, 'success');
+      closeRegisterModal();
+      loadStudents();
+    } catch (err) {
+      alert.textContent = err.message; alert.className = 'alert alert-error';
+    } finally {
+      btn.disabled = false; btn.innerHTML = '<i class="fas fa-save"></i> Register Student';
+    }
+  }
+
+  async function deleteStudent(id, name) {
+    if (!confirm(`Deactivate "${name}"?`)) return;
+    try { await API.deleteStudent(id); showToast(`${name} deactivated`, 'success'); loadStudents(); }
+    catch (err) { showToast(err.message, 'error'); }
+  }
+
+  init();
+</script>
+</body>
+</html>

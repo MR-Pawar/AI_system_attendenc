@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Timetable – AI Face Attendance</title>
+  <link rel="stylesheet" href="../css/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css" />
+</head>
+<body>
+<div class="app-layout">
+  <aside class="sidebar" id="sidebar"></aside>
+  <div class="main-content">
+    <header class="topbar" id="topbar"></header>
+    <div class="content-area">
+      <div class="card" style="margin-bottom:16px;">
+        <div class="card-header">
+          <div class="card-title"><i class="fas fa-calendar-days"></i> Timetable</div>
+        </div>
+        <div class="card-body">
+          <div style="font-size:12px;color:var(--text-2);margin-bottom:8px;">
+            Monday – Saturday • 2 classes daily • 11:30–12:30 and 12:30–13:30
+          </div>
+          <div id="ttWrap" style="overflow-x:auto;"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="../js/config.js"></script>
+  <script src="../js/api.js"></script>
+<script src="../js/auth.js"></script>
+<script src="../js/ui.js"></script>
+<script src="../js/sidebar.js"></script>
+<script>
+requireAuth();
+buildLayout('timetable','Timetable','SCHEDULE');
+
+const days = ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+const slots = [
+  { label: '11:30 – 12:30' },
+  { label: '12:30 – 13:30' },
+];
+
+(async function init(){
+  let classes=[];
+  try { classes = await API.getClasses(); } catch(e){}
+  render(classes || []);
+})();
+
+function render(classes){
+  const n = classes.length;
+  const rows = days.map((day, di) => {
+    const c1 = n ? classes[(di*2)%n] : null;
+    const c2 = n ? classes[(di*2+1)%n] : null;
+    return `
+      <tr>
+        <th style="text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);">${day}</th>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--border);">
+          ${c1 ? `<strong>${c1.class_name}</strong><div style="font-size:12px;color:var(--text-2);">${c1.subject}</div>` : '<span style="color:var(--text-2);">Free</span>'}
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px;">${slots[0].label}</div>
+        </td>
+        <td style="padding:10px 12px;border-bottom:1px solid var(--border);">
+          ${c2 ? `<strong>${c2.class_name}</strong><div style="font-size:12px;color:var(--text-2);">${c2.subject}</div>` : '<span style="color:var(--text-2);">Free</span>'}
+          <div style="font-size:11px;color:var(--text-3);margin-top:4px;">${slots[1].label}</div>
+        </td>
+      </tr>`;
+  }).join('');
+
+  const table = `
+    <table style="min-width:640px;border-collapse:collapse;width:100%;background:var(--bg-2);border:1px solid var(--border);border-radius:10px;overflow:hidden;">
+      <thead>
+        <tr style="background:var(--surface);">
+          <th style="text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);width:160px;">Day</th>
+          <th style="text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);">11:30 – 12:30</th>
+          <th style="text-align:left;padding:10px 12px;border-bottom:1px solid var(--border);">12:30 – 13:30</th>
+        </tr>
+      </thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+
+  document.getElementById('ttWrap').innerHTML = n ? table : `
+    <div style="padding:18px;border:1px solid var(--border);border-radius:10px;">
+      <div style="font-size:14px;color:var(--text-2);">No classes found. Add classes first in the Classes section.</div>
+    </div>`;
+}
+</script>
+</body>
+</html>
